@@ -128,7 +128,7 @@ export function RequestBuilder({
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 space-y-4 overflow-auto">
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
         <div className="flex min-w-0 flex-nowrap items-start gap-3">
           <MethodSelector
             value={draft.method}
@@ -149,33 +149,34 @@ export function RequestBuilder({
         <Tabs
           value={activeTab}
           onValueChange={(value) => onActiveTabChange(value as BuilderTab)}
+          className="flex min-h-0 w-full flex-1 flex-col"
         >
-          <TabsList>
+          <TabsList className="shrink-0 self-start">
             <TabsTrigger value="body">Body</TabsTrigger>
             <TabsTrigger value="headers">Headers</TabsTrigger>
             <TabsTrigger value="auth">Auth</TabsTrigger>
             <TabsTrigger value="params">Params</TabsTrigger>
           </TabsList>
-          <TabsContent value="body" className="pt-4">
+          <TabsContent value="body" className="flex min-h-0 w-full flex-1 pt-4">
             <BodyEditor
               value={draft.body}
               onChange={(body) => updateDraft({ body })}
             />
           </TabsContent>
-          <TabsContent value="headers" className="pt-4">
+          <TabsContent value="headers" className="min-h-0 flex-1 overflow-auto pt-4">
             <KeyValueTable
               rows={draft.headers}
               onChange={(headers) => updateDraft({ headers })}
               createRow={createHeaderRow}
             />
           </TabsContent>
-          <TabsContent value="auth" className="pt-4">
+          <TabsContent value="auth" className="min-h-0 flex-1 overflow-auto pt-4">
             <AuthEditor
               value={draft.auth}
               onChange={(auth) => updateDraft({ auth })}
             />
           </TabsContent>
-          <TabsContent value="params" className="pt-4">
+          <TabsContent value="params" className="min-h-0 flex-1 overflow-auto pt-4">
             <KeyValueTable
               rows={draft.params}
               onChange={(params) =>

@@ -14,12 +14,13 @@ import {
 } from "lucide-react";
 import type { AdminUser, User } from "@restify/shared";
 import { cn } from "../../lib/cn";
-import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 
 const SIDEBAR_WIDTH_KEY = "httpclient.sidebar-width";
 const INSPECTOR_WIDTH_KEY = "httpclient.inspector-width";
 const INSPECTOR_COLLAPSED_KEY = "httpclient.inspector-collapsed";
+const BUILDER_HEIGHT_KEY = "httpclient.builder-height";
 const DEFAULT_SIDEBAR_WIDTH = 340;
 const MIN_SIDEBAR_WIDTH = 260;
 const MAX_SIDEBAR_WIDTH = 560;
@@ -27,6 +28,10 @@ const DEFAULT_INSPECTOR_WIDTH = 336;
 const MIN_INSPECTOR_WIDTH = 280;
 const MAX_INSPECTOR_WIDTH = 520;
 const COLLAPSED_INSPECTOR_WIDTH = 52;
+const DEFAULT_BUILDER_HEIGHT = 420;
+const MIN_BUILDER_HEIGHT = 320;
+const MIN_RESPONSE_HEIGHT = 240;
+const CENTER_SECTION_GAP = 16;
 
 interface AppShellProps {
   user: AdminUser | User;
@@ -59,6 +64,17 @@ function clampInspectorWidth(width: number, maxWidth = MAX_INSPECTOR_WIDTH) {
   );
 }
 
+function clampBuilderHeight(
+  height: number,
+  maxHeight = Number.POSITIVE_INFINITY,
+) {
+  const resolvedMaxHeight = Math.max(MIN_BUILDER_HEIGHT, Math.round(maxHeight));
+  return Math.min(
+    resolvedMaxHeight,
+    Math.max(MIN_BUILDER_HEIGHT, Math.round(height)),
+  );
+}
+
 function getSidebarMaxWidth(containerWidth: number, inspectorWidth: number) {
   const reservedWidth = inspectorWidth + 284;
   return Math.min(
@@ -71,6 +87,13 @@ function getInspectorMaxWidth(containerWidth: number, sidebarWidth: number) {
   return Math.min(
     MAX_INSPECTOR_WIDTH,
     Math.max(MIN_INSPECTOR_WIDTH, containerWidth - sidebarWidth - 360),
+  );
+}
+
+function getBuilderMaxHeight(sectionHeight: number) {
+  return Math.max(
+    MIN_BUILDER_HEIGHT,
+    sectionHeight - MIN_RESPONSE_HEIGHT - CENTER_SECTION_GAP,
   );
 }
 
@@ -124,10 +147,13 @@ export function AppShell({
   onLogout,
 }: AppShellProps) {
   const mainRef = useRef<HTMLElement | null>(null);
+  const centerSectionRef = useRef<HTMLElement | null>(null);
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
+  const [builderHeight, setBuilderHeight] = useState(DEFAULT_BUILDER_HEIGHT);
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [isResizingInspector, setIsResizingInspector] = useState(false);
+  const [isResizingCenter, setIsResizingCenter] = useState(false);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
 
   useEffect(() => {
@@ -151,6 +177,16 @@ export function AppShell({
         const parsedWidth = Number(storedInspectorWidth);
         if (!Number.isNaN(parsedWidth)) {
           setInspectorWidth(clampInspectorWidth(parsedWidth));
+        }
+      }
+
+      const storedBuilderHeight = window.localStorage.getItem(
+        BUILDER_HEIGHT_KEY,
+      );
+      if (storedBuilderHeight) {
+        const parsedHeight = Number(storedBuilderHeight);
+        if (!Number.isNaN(parsedHeight)) {
+          setBuilderHeight(clampBuilderHeight(parsedHeight));
         }
       }
 
@@ -198,6 +234,18 @@ export function AppShell({
     }
 
     try {
+      window.localStorage.setItem(BUILDER_HEIGHT_KEY, String(builderHeight));
+    } catch {
+      return;
+    }
+  }, [builderHeight]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
       window.localStorage.setItem(
         INSPECTOR_COLLAPSED_KEY,
         String(isInspectorCollapsed),
@@ -210,32 +258,37 @@ export function AppShell({
   useEffect(() => {
     const clampToViewport = () => {
       const containerWidth = mainRef.current?.getBoundingClientRect().width;
-      if (!containerWidth) {
-        return;
-      }
+      if (containerWidth) {
+        const nextInspectorWidth = isInspectorCollapsed
+          ? inspectorWidth
+          : clampInspectorWidth(
+              inspectorWidth,
+              getInspectorMaxWidth(containerWidth, sidebarWidth),
+            );
 
-      const nextInspectorWidth = isInspectorCollapsed
-        ? inspectorWidth
-        : clampInspectorWidth(
-            inspectorWidth,
-            getInspectorMaxWidth(containerWidth, sidebarWidth),
-          );
+        if (!isInspectorCollapsed && nextInspectorWidth !== inspectorWidth) {
+          setInspectorWidth(nextInspectorWidth);
+        }
 
-      if (!isInspectorCollapsed && nextInspectorWidth !== inspectorWidth) {
-        setInspectorWidth(nextInspectorWidth);
-      }
-
-      setSidebarWidth((currentWidth) =>
-        clampSidebarWidth(
-          currentWidth,
-          getSidebarMaxWidth(
-            containerWidth,
-            isInspectorCollapsed
-              ? COLLAPSED_INSPECTOR_WIDTH
-              : nextInspectorWidth,
+        setSidebarWidth((currentWidth) =>
+          clampSidebarWidth(
+            currentWidth,
+            getSidebarMaxWidth(
+              containerWidth,
+              isInspectorCollapsed
+                ? COLLAPSED_INSPECTOR_WIDTH
+                : nextInspectorWidth,
+            ),
           ),
-        ),
-      );
+        );
+      }
+
+      const sectionHeight = centerSectionRef.current?.getBoundingClientRect().height;
+      if (sectionHeight) {
+        setBuilderHeight((currentHeight) =>
+          clampBuilderHeight(currentHeight, getBuilderMaxHeight(sectionHeight)),
+        );
+      }
     };
 
     clampToViewport();
@@ -318,6 +371,38 @@ export function AppShell({
     };
   }, [isInspectorCollapsed, isResizingInspector, sidebarWidth]);
 
+  useEffect(() => {
+    if (!isResizingCenter) {
+      return;
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const bounds = centerSectionRef.current?.getBoundingClientRect();
+      if (!bounds) {
+        return;
+      }
+
+      const nextHeight = event.clientY - bounds.top;
+      setBuilderHeight(
+        clampBuilderHeight(nextHeight, getBuilderMaxHeight(bounds.height)),
+      );
+    };
+
+    const stopResizing = () => setIsResizingCenter(false);
+
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResizing);
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResizing);
+    };
+  }, [isResizingCenter]);
+
   const mainStyle = useMemo(
     () =>
       ({
@@ -327,6 +412,13 @@ export function AppShell({
           : `${inspectorWidth}px`,
       }) as CSSProperties,
     [inspectorWidth, isInspectorCollapsed, sidebarWidth],
+  );
+
+  const centerStyle = useMemo(
+    () => ({
+      "--builder-height": `${builderHeight}px`,
+    }) as CSSProperties,
+    [builderHeight],
   );
 
   const handleResizeStart = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -352,8 +444,19 @@ export function AppShell({
     setIsResizingInspector(true);
   };
 
+  const handleCenterResizeStart = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+  ) => {
+    if (typeof window !== "undefined" && window.innerWidth <= 1280) {
+      return;
+    }
+
+    event.preventDefault();
+    setIsResizingCenter(true);
+  };
+
   return (
-    <div className="flex h-screen overflow-hidden flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       <header className="shrink-0 border-b border-white/10 bg-slate-950/70 px-5 py-3 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -413,7 +516,7 @@ export function AppShell({
       <main
         ref={mainRef}
         style={mainStyle}
-        className="grid min-h-0 flex-1 overflow-hidden grid-cols-[var(--sidebar-width)_minmax(0,1fr)_var(--inspector-width)] gap-5 p-5 max-[1280px]:overflow-y-auto max-[1280px]:grid-cols-1"
+        className="grid min-h-0 flex-1 grid-cols-[var(--sidebar-width)_minmax(0,1fr)_var(--inspector-width)] gap-5 overflow-hidden p-5 max-[1280px]:grid-cols-1 max-[1280px]:overflow-y-auto"
       >
         <aside className="relative min-h-0 overflow-hidden">
           {sidebar}
@@ -437,9 +540,34 @@ export function AppShell({
             />
           </button>
         </aside>
-        <section className="grid min-h-0 overflow-hidden grid-rows-[minmax(0,1fr)_minmax(260px,40%)] gap-4">
-          {builder}
-          {response}
+        <section
+          ref={centerSectionRef}
+          style={centerStyle}
+          className="grid min-h-0 overflow-hidden grid-rows-[var(--builder-height)_minmax(240px,1fr)] gap-4"
+        >
+          <div className="min-h-0 overflow-hidden">{builder}</div>
+          <div className="relative min-h-0 overflow-hidden">
+            <button
+              className="group absolute -top-4 left-0 z-10 flex h-8 w-full cursor-row-resize items-center justify-center max-[1280px]:hidden"
+              onPointerDown={handleCenterResizeStart}
+              type="button"
+              aria-label="Resize request builder and response viewer"
+            >
+              <span
+                className={cn(
+                  "h-px w-full transition",
+                  isResizingCenter ? "bg-accent/80" : "bg-white/10",
+                )}
+              />
+              <span
+                className={cn(
+                  "absolute left-1/2 top-1/2 h-2 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-slate-950/90 opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-visible:opacity-100",
+                  isResizingCenter && "border-accent/30 bg-accent/20 opacity-100",
+                )}
+              />
+            </button>
+            {response}
+          </div>
         </section>
         <aside
           className={cn(
@@ -518,5 +646,3 @@ export function AppShell({
     </div>
   );
 }
-
-
