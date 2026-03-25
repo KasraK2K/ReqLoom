@@ -83,7 +83,7 @@ export function MethodSelector({ value, onChange }: MethodSelectorProps) {
           <div
             ref={menuRef}
             style={{ top: menuPosition.top, left: menuPosition.left, width: MENU_WIDTH }}
-            className="fixed z-[100] overflow-hidden rounded-xl border border-white/10 bg-slate-950/98 p-1 shadow-2xl"
+            className="fixed z-[100] overflow-hidden rounded-xl border border-white/10 bg-slate-950 p-1 shadow-2xl"
           >
             <div className="max-h-[260px] overflow-y-auto">
               {METHOD_OPTIONS.map((method) => (
@@ -134,3 +134,4 @@ export function MethodSelector({ value, onChange }: MethodSelectorProps) {
     </>
   );
 }
+

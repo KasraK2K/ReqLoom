@@ -93,7 +93,7 @@ export function ContextMenus({
         <div
           ref={menuRef}
           style={{ top: menuPosition.top, left: menuPosition.left, width: MENU_WIDTH }}
-          className="fixed z-[100] rounded-lg border border-white/10 bg-slate-950/98 p-1 shadow-2xl"
+          className="fixed z-[100] rounded-lg border border-white/10 bg-slate-950 p-1 shadow-2xl"
         >
           {onCreate ? (
             <Button
@@ -151,3 +151,4 @@ export function ContextMenus({
     </>
   );
 }
+
