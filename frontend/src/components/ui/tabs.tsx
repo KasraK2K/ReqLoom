@@ -129,7 +129,7 @@ export function TabsTrigger({
       data-tabs-value={value}
       disabled={disabled}
       className={cn(
-        "rounded-md px-2.5 py-1.5 text-[13px] leading-5 transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/45 disabled:cursor-not-allowed disabled:opacity-50",
+        "rounded-[6px] px-3 py-1.5 text-[13px] leading-5 transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/45 disabled:cursor-not-allowed disabled:opacity-50",
         active
           ? "bg-accent text-slate-950"
           : "text-muted hover:bg-white/6 hover:text-foreground",

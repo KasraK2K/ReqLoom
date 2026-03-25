@@ -130,7 +130,7 @@ export function FormDataTable({ rows, envVars, onChange }: FormDataTableProps) {
           return (
             <div
               key={row.id}
-              className="rounded-xl border border-white/8 bg-slate-950/30 p-3 md:rounded-none md:border-0 md:bg-transparent md:p-0"
+              className="rounded-lg border border-white/8 bg-slate-950/30 p-3 md:rounded-none md:border-0 md:bg-transparent md:p-0"
             >
               <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_120px_minmax(0,1fr)_78px_44px] md:items-center md:gap-2">
                 <div className="space-y-1.5">
@@ -205,8 +205,8 @@ export function FormDataTable({ rows, envVars, onChange }: FormDataTableProps) {
                         {row.fileName ? (
                           <>
                             <span className="font-medium text-foreground">{row.fileName}</span>
-                            {row.fileContentType ? ` · ${row.fileContentType}` : ""}
-                            {fileSizeLabel ? ` · ${fileSizeLabel}` : ""}
+                            {row.fileContentType ? <><span className="mx-1 text-white/30">&middot;</span>{row.fileContentType}</> : null}
+                            {fileSizeLabel ? <><span className="mx-1 text-white/30">&middot;</span>{fileSizeLabel}</> : null}
                           </>
                         ) : (
                           "No file selected"
@@ -219,13 +219,14 @@ export function FormDataTable({ rows, envVars, onChange }: FormDataTableProps) {
                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted md:hidden">
                     Enabled
                   </div>
-                  <label className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-xs text-muted">
+                  <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-muted transition hover:bg-white/8">
                     <input
                       checked={row.enabled}
                       onChange={(event) =>
                         updateRow(index, { enabled: event.target.checked })
                       }
                       type="checkbox"
+                      className="h-3.5 w-3.5 accent-accent"
                     />
                     <span className="md:hidden">Enabled</span>
                   </label>
@@ -233,7 +234,7 @@ export function FormDataTable({ rows, envVars, onChange }: FormDataTableProps) {
                 <div className="flex items-end justify-end md:self-center md:justify-center">
                   <Button
                     variant="ghost"
-                    className="h-10 w-10 rounded-xl p-0 text-rose-300 hover:text-rose-200"
+                    className="h-10 w-10 rounded-lg p-0 text-rose-300 hover:text-rose-200"
                     onClick={() => removeRow(index)}
                     aria-label={`Remove form-data row ${index + 1}`}
                     title="Remove row"

@@ -62,7 +62,7 @@ export function KeyValueTable<T extends Row>({
         {rows.map((row, index) => (
           <div
             key={row.id}
-            className="rounded-xl border border-white/8 bg-slate-950/30 p-3 md:rounded-none md:border-0 md:bg-transparent md:p-0"
+            className="rounded-lg border border-white/8 bg-slate-950/30 p-3 md:rounded-none md:border-0 md:bg-transparent md:p-0"
           >
             <div className={`grid gap-3 md:items-center md:gap-2 ${desktopGridClass}`}>
               <div className="space-y-1.5">
@@ -96,7 +96,7 @@ export function KeyValueTable<T extends Row>({
                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted md:hidden">
                     Enabled
                   </div>
-                  <label className="flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 text-xs text-muted">
+                  <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-muted transition hover:bg-white/8">
                     <input
                       checked={row.enabled}
                       onChange={(event) =>
@@ -106,6 +106,7 @@ export function KeyValueTable<T extends Row>({
                         )
                       }
                       type="checkbox"
+                      className="h-3.5 w-3.5 accent-accent"
                     />
                     <span className="md:hidden">Enabled</span>
                   </label>
@@ -114,7 +115,7 @@ export function KeyValueTable<T extends Row>({
               <div className="flex items-end justify-end md:justify-center">
                 <Button
                   variant="ghost"
-                  className="h-10 w-10 rounded-xl p-0 text-rose-300 hover:text-rose-200"
+                  className="h-10 w-10 rounded-lg p-0 text-rose-300 hover:text-rose-200"
                   onClick={() => removeRow(index)}
                   aria-label={`Remove ${keyLabel.toLowerCase()} row ${index + 1}`}
                   title="Remove row"

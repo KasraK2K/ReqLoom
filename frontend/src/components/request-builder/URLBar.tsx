@@ -29,9 +29,10 @@ export function URLBar({
           placeholder="https://api.example.com/users/{{userId}}"
         />
         <Button
-          className="h-11 shrink-0 justify-center min-[980px]:px-4"
+          className="h-11 shrink-0 justify-center px-5 font-semibold"
           onClick={onSend}
           disabled={isSending || !value.trim()}
+          title="Send request (Ctrl+Enter)"
         >
           <SendHorizontal className="h-4 w-4" />
           {isSending ? "Sending..." : "Send"}

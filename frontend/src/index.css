@@ -19,12 +19,12 @@ body {
   background:
     radial-gradient(
       circle at top left,
-      rgba(97, 176, 255, 0.18),
+      rgba(97, 176, 255, 0.10),
       transparent 28%
     ),
     radial-gradient(
       circle at top right,
-      rgba(33, 208, 143, 0.14),
+      rgba(33, 208, 143, 0.08),
       transparent 24%
     ),
     linear-gradient(180deg, #09111f 0%, #0b1020 48%, #070b14 100%);
@@ -34,7 +34,7 @@ body {
 * {
   box-sizing: border-box;
   scrollbar-width: thin;
-  scrollbar-color: rgba(124, 196, 255, 0.42) rgba(255, 255, 255, 0.03);
+  scrollbar-color: rgba(124, 196, 255, 0.28) rgba(255, 255, 255, 0.02);
 }
 
 #root {
@@ -57,7 +57,7 @@ textarea {
   border-radius: 0.75rem;
   background: #020617;
   padding: 0.25rem;
-  box-shadow: 0 24px 56px rgba(2, 6, 23, 0.55);
+  box-shadow: 0 16px 40px rgba(2, 6, 23, 0.45);
   overscroll-behavior: contain;
 }
 
@@ -110,8 +110,8 @@ textarea {
 }
 
 ::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
@@ -122,8 +122,8 @@ textarea {
   background: linear-gradient(
     to right,
     transparent calc(50% - 0.5px),
-    rgba(255, 255, 255, 0.08) calc(50% - 0.5px),
-    rgba(255, 255, 255, 0.08) calc(50% + 0.5px),
+    rgba(255, 255, 255, 0.05) calc(50% - 0.5px),
+    rgba(255, 255, 255, 0.05) calc(50% + 0.5px),
     transparent calc(50% + 0.5px)
   );
 }
@@ -132,31 +132,31 @@ textarea {
   background: linear-gradient(
     to bottom,
     transparent calc(50% - 0.5px),
-    rgba(255, 255, 255, 0.08) calc(50% - 0.5px),
-    rgba(255, 255, 255, 0.08) calc(50% + 0.5px),
+    rgba(255, 255, 255, 0.05) calc(50% - 0.5px),
+    rgba(255, 255, 255, 0.05) calc(50% + 0.5px),
     transparent calc(50% + 0.5px)
   );
 }
 
 ::-webkit-scrollbar-thumb {
-  min-height: 52px;
-  min-width: 52px;
+  min-height: 36px;
+  min-width: 36px;
   border: 3px solid transparent;
   border-radius: 999px;
   background: linear-gradient(
     180deg,
-    rgba(124, 196, 255, 0.62),
-    rgba(97, 176, 255, 0.4)
+    rgba(124, 196, 255, 0.35),
+    rgba(97, 176, 255, 0.22)
   );
   background-clip: padding-box;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(
     180deg,
-    rgba(145, 211, 255, 0.74),
-    rgba(97, 176, 255, 0.5)
+    rgba(145, 211, 255, 0.50),
+    rgba(97, 176, 255, 0.35)
   );
   background-clip: padding-box;
 }
@@ -164,8 +164,8 @@ textarea {
 ::-webkit-scrollbar-thumb:active {
   background: linear-gradient(
     180deg,
-    rgba(145, 211, 255, 0.84),
-    rgba(97, 176, 255, 0.6)
+    rgba(145, 211, 255, 0.62),
+    rgba(97, 176, 255, 0.45)
   );
   background-clip: padding-box;
 }

@@ -33,19 +33,23 @@ export function ResponseViewer({ response }: ResponseViewerProps) {
   return (
     <Card className="flex h-full min-h-0 flex-col overflow-hidden">
       <CardHeader>
-        <div className="flex w-full items-start justify-between gap-4">
-          <div className="min-w-0 flex-1">
-            <CardTitle>Response Viewer</CardTitle>
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
-              <StatusBadge status={response?.status} />
-              {response ? <span>{response.durationMs} ms</span> : null}
-              {response ? <span>{response.sizeBytes} bytes</span> : null}
-              {response ? <span>{response.contentType}</span> : null}
-            </div>
+        <div className="flex w-full items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <CardTitle className="shrink-0">Response</CardTitle>
+            <StatusBadge status={response?.status} />
+            {response ? (
+              <div className="hidden min-w-0 items-center gap-1 text-xs text-muted sm:flex">
+                <span>{response.durationMs} ms</span>
+                <span className="text-white/25">&middot;</span>
+                <span>{response.sizeBytes} B</span>
+                <span className="text-white/25">&middot;</span>
+                <span className="truncate">{response.contentType}</span>
+              </div>
+            ) : null}
           </div>
           <Button
-            variant="secondary"
-            className="h-9 w-9 shrink-0 rounded-lg p-0"
+            variant="ghost"
+            className="h-8 w-8 shrink-0 rounded-lg p-0"
             onClick={copyResponse}
             disabled={!response}
             aria-label="Copy response"

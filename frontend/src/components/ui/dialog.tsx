@@ -115,7 +115,7 @@ export function Dialog({
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          "flex max-h-[calc(100vh-2rem)] min-h-0 w-full max-w-lg flex-col rounded-2xl border border-white/10 bg-slate-950 p-5 shadow-glow outline-none",
+          "flex max-h-[calc(100vh-2rem)] min-h-0 w-full max-w-lg flex-col rounded-xl border border-white/10 bg-slate-950 p-6 shadow-glow outline-none",
           className,
         )}
         onMouseDown={(event) => event.stopPropagation()}

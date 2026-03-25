@@ -126,7 +126,7 @@ function ContextCrumb({
       </span>
       <span
         className={cn(
-          "truncate text-[13px] leading-5",
+          "truncate text-sm leading-5",
           value
             ? isCurrent
               ? "font-medium text-foreground"
@@ -140,51 +140,31 @@ function ContextCrumb({
   );
 }
 
-function RoleChip({ role }: { role: AdminUser["role"] | User["role"] }) {
+function RoleBadge({ role }: { role: AdminUser["role"] | User["role"] }) {
   let label = "Member";
-  let icon = <UserIcon className="h-4 w-4" />;
-  let containerClassName = "border-white/10 bg-white/[0.04]";
-  let iconClassName = "border-white/10 bg-white/[0.08] text-slate-100";
-  let labelClassName = "text-slate-100";
+  let icon = <UserIcon className="h-3 w-3" />;
+  let badgeClassName = "border-white/10 bg-white/[0.04] text-slate-200";
 
   if (role === "superadmin") {
     label = "Super Admin";
-    icon = <ShieldCheck className="h-4 w-4" />;
-    containerClassName = "border-sky-400/20 bg-sky-400/10";
-    iconClassName = "border-sky-300/20 bg-sky-300/12 text-sky-100";
-    labelClassName = "text-sky-50";
+    icon = <ShieldCheck className="h-3 w-3" />;
+    badgeClassName = "border-sky-400/20 bg-sky-400/10 text-sky-200";
   } else if (role === "admin") {
     label = "Admin";
-    icon = <Shield className="h-4 w-4" />;
-    containerClassName = "border-emerald-400/18 bg-emerald-400/10";
-    iconClassName = "border-emerald-300/20 bg-emerald-300/12 text-emerald-100";
-    labelClassName = "text-emerald-50";
+    icon = <Shield className="h-3 w-3" />;
+    badgeClassName = "border-emerald-400/18 bg-emerald-400/10 text-emerald-200";
   }
 
   return (
-    <div
+    <span
       className={cn(
-        "inline-flex items-center gap-2 rounded-2xl border px-2.5 py-1.5",
-        containerClassName,
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium",
+        badgeClassName,
       )}
     >
-      <span
-        className={cn(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border",
-          iconClassName,
-        )}
-      >
-        {icon}
-      </span>
-      <span className="min-w-0">
-        <span className="block text-[9px] font-semibold uppercase tracking-[0.24em] text-muted/90">
-          Role
-        </span>
-        <span className={cn("block text-xs font-semibold leading-4", labelClassName)}>
-          {label}
-        </span>
-      </span>
-    </div>
+      {icon}
+      {label}
+    </span>
   );
 }
 
@@ -514,20 +494,17 @@ export function AppShell({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-white/10 bg-slate-950/70 px-4 py-3 backdrop-blur sm:px-5">
-        <div className="flex flex-wrap items-start justify-between gap-3 sm:items-center">
-          <div className="min-w-0 flex-1 space-y-2">
-            <div className="flex max-w-full min-w-0 flex-wrap items-center gap-3 rounded-[26px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02))] px-3 py-2 shadow-[0_12px_32px_rgba(2,6,23,0.24)]">
-              <img
-                src={httpClientLogo}
-                alt="HttpClient"
-                className="h-10 w-auto max-w-[208px] shrink-0 sm:h-11 sm:max-w-[236px]"
-              />
-              <span className="hidden h-8 w-px shrink-0 bg-white/8 sm:block" />
-              <RoleChip role={user.role} />
-            </div>
+      <header className="shrink-0 border-b border-white/10 bg-slate-950/70 px-4 py-2.5 backdrop-blur sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <img
+              src={httpClientLogo}
+              alt="HttpClient"
+              className="h-8 w-auto max-w-[180px] shrink-0 sm:h-9 sm:max-w-[208px]"
+            />
+            <span className="hidden h-6 w-px shrink-0 bg-white/10 sm:block" aria-hidden="true" />
             <nav
-              className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-2.5"
+              className="hidden min-w-0 flex-wrap items-center gap-2.5 sm:flex"
               aria-label="Current request context"
             >
               <ContextCrumb
@@ -553,22 +530,21 @@ export function AppShell({
               />
             </nav>
           </div>
-          <div className="flex min-w-0 shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-2 max-[640px]:w-full max-[640px]:justify-between">
-            <div className="min-w-0 text-right text-xs text-muted max-[480px]:hidden">
-              <div className="truncate font-medium text-foreground">
-                {user.username}
-              </div>
-              <div>Secure cookie session</div>
-            </div>
+          <div className="flex shrink-0 items-center gap-2.5">
+            <RoleBadge role={user.role} />
+            <span className="hidden h-6 w-px shrink-0 bg-white/10 sm:block" aria-hidden="true" />
+            <span className="hidden truncate text-sm font-medium text-foreground sm:block max-[900px]:hidden">
+              {user.username}
+            </span>
             <Button
-              className="h-9 rounded-full px-3 max-[480px]:w-9 max-[480px]:p-0"
-              variant="secondary"
+              className="h-8 rounded-lg px-2.5"
+              variant="ghost"
               onClick={onLogout}
               title="Logout"
               aria-label="Logout"
             >
               <LogOut className="h-4 w-4" />
-              <span className="max-[480px]:hidden">Logout</span>
+              <span className="max-[640px]:hidden">Logout</span>
             </Button>
           </div>
         </div>
@@ -656,7 +632,7 @@ export function AppShell({
               />
             </button>
           ) : null}
-          <div className="flex h-full min-h-0 overflow-hidden rounded-2xl border border-white/10 bg-card/85 shadow-glow backdrop-blur">
+          <div className="flex h-full min-h-0 overflow-hidden rounded-xl border border-white/10 bg-card/85 shadow-glow backdrop-blur">
             <div
               className={cn(
                 "min-w-0 flex-1 overflow-hidden transition-[width,opacity] duration-200",

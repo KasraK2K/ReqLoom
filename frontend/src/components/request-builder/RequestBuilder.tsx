@@ -92,34 +92,27 @@ export function RequestBuilder({
   return (
     <Card className="flex h-full min-h-0 flex-col overflow-hidden">
       <CardHeader>
-        <div className="flex w-full items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <CardTitle>Request Builder</CardTitle>
-            <p className="mt-1 text-xs text-muted">
-              Ctrl+Enter sends the active request from any request input.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="secondary"
-              className="h-9 w-9 rounded-lg p-0"
-              onClick={() => void copyCurl()}
-              disabled={!sendPayload}
-              aria-label="Copy cURL command"
-              title="Copy cURL command"
-            >
-              <TerminalSquare className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="secondary"
-              className="h-9 w-9 rounded-lg p-0"
-              onClick={onSave}
-              aria-label="Save request"
-              title="Save request"
-            >
-              <Save className="h-4 w-4" />
-            </Button>
-          </div>
+        <CardTitle>Request Builder</CardTitle>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <Button
+            variant="ghost"
+            className="h-8 w-8 rounded-lg p-0"
+            onClick={() => void copyCurl()}
+            disabled={!sendPayload}
+            aria-label="Copy cURL command"
+            title="Copy cURL command"
+          >
+            <TerminalSquare className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            className="h-8 w-8 rounded-lg p-0"
+            onClick={onSave}
+            aria-label="Save request"
+            title="Save request"
+          >
+            <Save className="h-4 w-4" />
+          </Button>
         </div>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
