@@ -68,6 +68,10 @@ interface WorkspaceTreeProps {
   onUnlockProject: (projectId: string) => void;
 }
 
+function formatCount(value: number, singular: string, plural = `${singular}s`) {
+  return `${value} ${value === 1 ? singular : plural}`;
+}
+
 function SortableRow({ id, children }: { id: string; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition } =
     useSortable({ id });
@@ -79,7 +83,7 @@ function SortableRow({ id, children }: { id: string; children: ReactNode }) {
   return (
     <div ref={setNodeRef} style={style} className="group flex items-start gap-1.5">
       <button
-        className="mt-3 rounded-md p-1 text-muted/70 transition hover:bg-white/8 hover:text-foreground"
+        className="mt-2 rounded-md p-1 text-muted/70 transition hover:bg-white/8 hover:text-foreground"
         {...attributes}
         {...listeners}
         type="button"
@@ -125,7 +129,7 @@ function ReorderableList<T extends SortableItem>({
         items={items.map((item) => item._id)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {items.map((item) => (
             <SortableRow key={item._id} id={item._id}>
               {renderItem(item)}
@@ -137,40 +141,35 @@ function ReorderableList<T extends SortableItem>({
   );
 }
 
-function TreeItemLabel({
+function TreeNodeContent({
   icon,
-  label,
-  value,
+  name,
+  meta,
   accessory,
-  extra,
 }: {
   icon: ReactNode;
-  label: string;
-  value: string;
+  name: string;
+  meta?: string;
   accessory?: ReactNode;
-  extra?: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 items-start gap-3">
-      <span className="mt-1 shrink-0 text-accent">{icon}</span>
+    <div className="flex min-w-0 items-start gap-2.5">
+      <span className="mt-0.5 shrink-0">{icon}</span>
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.22em] text-muted">
-          <span>{label}</span>
-          {extra}
-        </div>
         <div
-          className="mt-1 break-words text-sm font-medium leading-5 text-foreground"
-          title={value}
+          className="break-words text-sm font-medium leading-5 text-foreground"
+          title={name}
         >
-          {value}
+          {name}
         </div>
+        {meta ? <div className="mt-0.5 text-xs text-muted">{meta}</div> : null}
       </div>
-      {accessory ? <div className="mt-1 shrink-0">{accessory}</div> : null}
+      {accessory ? <div className="mt-0.5 shrink-0">{accessory}</div> : null}
     </div>
   );
 }
 
-function RequestRow({
+function RequestItem({
   request,
   activeRequestId,
   onSelectRequest,
@@ -186,28 +185,26 @@ function RequestRow({
   return (
     <div
       className={cn(
-        "group relative rounded-xl border px-3 py-2.5 transition",
+        "group relative rounded-lg px-2 py-1.5 transition",
         activeRequestId === request._id
-          ? "border-accent/25 bg-accent/12"
-          : "border-white/8 bg-white/[0.03] hover:bg-white/[0.06]",
+          ? "bg-accent/12"
+          : "hover:bg-white/[0.05]",
       )}
     >
-      <button
-        className="w-full min-w-0 text-left"
-        onClick={() => onSelectRequest(request._id)}
-        type="button"
-      >
-        <TreeItemLabel
-          icon={<Send className="h-4 w-4 text-sky-300" />}
-          label="Request"
-          value={request.name}
-          extra={
-            <span className="rounded-full border border-white/10 bg-white/8 px-2 py-0.5 text-[10px] tracking-normal text-foreground/80">
-              {request.method}
-            </span>
-          }
-        />
-      </button>
+      <div className="flex items-start gap-2 pr-10">
+        <Send className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-300" />
+        <button
+          className="min-w-0 flex-1 text-left"
+          onClick={() => onSelectRequest(request._id)}
+          type="button"
+          title={request.name}
+        >
+          <span className="block break-words text-sm leading-5 text-foreground">
+            {request.name}
+          </span>
+          <span className="mt-0.5 block text-xs text-muted">{request.method}</span>
+        </button>
+      </div>
       <ContextMenus
         onDuplicate={() => onDuplicateRequest(request._id)}
         onDelete={() => onDeleteRequest(request._id)}
@@ -274,220 +271,263 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4 overflow-y-auto p-4">
+      <CardContent className="space-y-3 overflow-y-auto p-3">
         <ReorderableList
           items={workspaceList}
           onReorder={onWorkspaceReorder}
-          renderItem={(workspace) => (
-            <div className="rounded-2xl border border-white/8 bg-white/4 p-3">
-              <div
-                className={cn(
-                  "group relative rounded-xl border px-3 py-3 transition",
-                  activeWorkspaceId === workspace._id
-                    ? "border-accent/20 bg-accent/10"
-                    : "border-white/8 bg-slate-900/30 hover:bg-white/6",
-                )}
-              >
-                <button
-                  className="w-full min-w-0 text-left"
-                  onClick={() =>
-                    workspace.isPasswordProtected
-                      ? onUnlockWorkspace(workspace._id)
-                      : onSelectWorkspace(workspace._id)
-                  }
-                  type="button"
+          renderItem={(workspace) => {
+            const isActiveWorkspace = workspace._id === activeWorkspaceId;
+            const activeWorkspaceTree = isActiveWorkspace ? tree : undefined;
+            const isExpandedWorkspace = Boolean(activeWorkspaceTree);
+            const workspaceMeta = activeWorkspaceTree
+              ? formatCount(activeWorkspaceTree.projects.length, "project")
+              : "Select to load projects";
+
+            return (
+              <div className="rounded-xl border border-white/8 bg-white/[0.03] p-2.5">
+                <div
+                  className={cn(
+                    "group relative rounded-lg px-2 py-2 transition",
+                    isActiveWorkspace ? "bg-accent/10" : "hover:bg-white/[0.05]",
+                  )}
                 >
-                  <TreeItemLabel
-                    icon={<Layers3 className="h-4 w-4" />}
-                    label="Workspace"
-                    value={workspace.name}
-                    accessory={
-                      workspace.isPasswordProtected ? (
-                        <LockIcon locked={workspace.isPasswordProtected} />
-                      ) : null
-                    }
-                  />
-                </button>
-                <ContextMenus
-                  onCreate={
-                    activeWorkspaceId === workspace._id ? onCreateProject : undefined
-                  }
-                  onDuplicate={() => onDuplicateWorkspace(workspace._id)}
-                  onDelete={() => onDeleteWorkspace(workspace._id)}
-                />
-              </div>
-              {tree && workspace._id === activeWorkspaceId ? (
-                <div className="mt-3 space-y-3 border-l border-white/10 pl-3">
-                  <ReorderableList
-                    items={[...tree.projects].sort((a, b) => a.order - b.order)}
-                    onReorder={onProjectReorder}
-                    renderItem={(project) => {
-                      const expanded = expandedProjects[project._id] ?? true;
-                      return (
-                        <div className="rounded-xl border border-white/8 bg-slate-950/35 p-3">
-                          <div
-                            className={cn(
-                              "group relative rounded-lg transition",
-                              activeProjectId === project._id
-                                ? "bg-white/[0.06]"
-                                : "hover:bg-white/[0.04]",
-                            )}
-                          >
-                            <div className="flex items-start gap-2 pr-12">
-                              <button
-                                className="mt-4 rounded-md p-1 text-muted transition hover:bg-white/8 hover:text-foreground"
-                                onClick={() =>
-                                  setExpandedProjects((state) => ({
-                                    ...state,
-                                    [project._id]: !expanded,
-                                  }))
-                                }
-                                type="button"
-                              >
-                                {expanded ? (
-                                  <ChevronDown className="h-3.5 w-3.5" />
-                                ) : (
-                                  <ChevronRight className="h-3.5 w-3.5" />
-                                )}
-                              </button>
-                              <button
-                                className="min-w-0 flex-1 text-left"
-                                onClick={() =>
-                                  project.isPasswordProtected
-                                    ? onUnlockProject(project._id)
-                                    : onSelectProject(project._id)
-                                }
-                                type="button"
-                              >
-                                <TreeItemLabel
-                                  icon={<Workflow className="h-4 w-4 text-sky-300" />}
-                                  label="Project"
-                                  value={project.name}
-                                  accessory={
-                                    project.isPasswordProtected ? (
-                                      <LockIcon locked={project.isPasswordProtected} />
-                                    ) : null
-                                  }
-                                />
-                              </button>
-                            </div>
-                            <ContextMenus
-                              onCreate={() => onCreateRequest(project._id)}
-                              onDuplicate={() => onDuplicateProject(project._id)}
-                              onDelete={() => onDeleteProject(project._id)}
-                            />
-                          </div>
-                          {expanded ? (
-                            <div className="mt-3 space-y-2 border-l border-white/8 pl-3">
-                              {project.requests.length > 0 ? (
-                                <ReorderableList
-                                  items={[...project.requests].sort(
-                                    (a, b) => a.order - b.order,
-                                  )}
-                                  onReorder={onRequestReorder}
-                                  renderItem={(request) => (
-                                    <RequestRow
-                                      request={request}
-                                      activeRequestId={activeRequestId}
-                                      onSelectRequest={onSelectRequest}
-                                      onDuplicateRequest={onDuplicateRequest}
-                                      onDeleteRequest={onDeleteRequest}
-                                    />
-                                  )}
-                                />
-                              ) : null}
-                              <ReorderableList
-                                items={[...project.folders].sort(
-                                  (a, b) => a.order - b.order,
-                                )}
-                                onReorder={(orderedIds) =>
-                                  onFolderReorder(project._id, orderedIds)
-                                }
-                                renderItem={(folder) => {
-                                  const expandedFolder =
-                                    expandedFolders[folder._id] ?? true;
-                                  return (
-                                    <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                                      <div className="group relative rounded-lg transition hover:bg-white/[0.04]">
-                                        <div className="flex items-start gap-2 pr-12">
-                                          <button
-                                            className="mt-4 rounded-md p-1 text-muted transition hover:bg-white/8 hover:text-foreground"
-                                            onClick={() =>
-                                              setExpandedFolders((state) => ({
-                                                ...state,
-                                                [folder._id]: !expandedFolder,
-                                              }))
-                                            }
-                                            type="button"
-                                          >
-                                            {expandedFolder ? (
-                                              <ChevronDown className="h-3.5 w-3.5" />
-                                            ) : (
-                                              <ChevronRight className="h-3.5 w-3.5" />
-                                            )}
-                                          </button>
-                                          <div className="min-w-0 flex-1">
-                                            <TreeItemLabel
-                                              icon={
-                                                expandedFolder ? (
-                                                  <Folder className="h-4 w-4 text-amber-300" />
-                                                ) : (
-                                                  <FolderClosed className="h-4 w-4 text-amber-300" />
-                                                )
-                                              }
-                                              label="Folder"
-                                              value={folder.name}
-                                            />
-                                          </div>
-                                        </div>
-                                        <ContextMenus
-                                          onCreate={() =>
-                                            onCreateRequest(project._id, folder._id)
-                                          }
-                                          onDuplicate={() =>
-                                            onDuplicateFolder(folder._id)
-                                          }
-                                          onDelete={() => onDeleteFolder(folder._id)}
-                                        />
-                                      </div>
-                                      {expandedFolder ? (
-                                        <div className="mt-3 space-y-2 border-l border-white/8 pl-3">
-                                          {folder.requests.map((request) => (
-                                            <RequestRow
-                                              key={request._id}
-                                              request={request}
-                                              activeRequestId={activeRequestId}
-                                              onSelectRequest={onSelectRequest}
-                                              onDuplicateRequest={onDuplicateRequest}
-                                              onDeleteRequest={onDeleteRequest}
-                                            />
-                                          ))}
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                  );
-                                }}
-                              />
-                              <Button
-                                variant="ghost"
-                                className="w-full justify-start rounded-xl border border-dashed border-white/10 bg-white/[0.03] py-2.5 text-foreground hover:bg-white/[0.07]"
-                                onClick={() => onCreateFolder(project._id)}
-                              >
-                                <Plus className="h-4 w-4" />
-                                Add Folder
-                              </Button>
-                            </div>
-                          ) : null}
-                        </div>
-                      );
-                    }}
+                  <div className="flex items-start gap-2 pr-10">
+                    <button
+                      className="mt-0.5 rounded-md p-1 text-muted transition hover:bg-white/8 hover:text-foreground"
+                      onClick={() => onSelectWorkspace(workspace._id)}
+                      type="button"
+                    >
+                      {isExpandedWorkspace ? (
+                        <ChevronDown className="h-3.5 w-3.5" />
+                      ) : (
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                    <button
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() => {
+                        if (workspace.isPasswordProtected) {
+                          onUnlockWorkspace(workspace._id);
+                          return;
+                        }
+                        onSelectWorkspace(workspace._id);
+                      }}
+                      type="button"
+                    >
+                      <TreeNodeContent
+                        icon={<Layers3 className="h-4 w-4 text-accent" />}
+                        name={workspace.name}
+                        meta={workspaceMeta}
+                        accessory={
+                          workspace.isPasswordProtected ? (
+                            <LockIcon locked={workspace.isPasswordProtected} />
+                          ) : null
+                        }
+                      />
+                    </button>
+                  </div>
+                  <ContextMenus
+                    onCreate={isActiveWorkspace ? onCreateProject : undefined}
+                    onDuplicate={() => onDuplicateWorkspace(workspace._id)}
+                    onDelete={() => onDeleteWorkspace(workspace._id)}
                   />
                 </div>
-              ) : null}
-            </div>
-          )}
+                {isExpandedWorkspace ? (
+                  <div className="mt-2 space-y-2 border-l border-white/10 pl-3">
+                    <ReorderableList
+                      items={[...(activeWorkspaceTree?.projects ?? [])].sort((a, b) => a.order - b.order)}
+                      onReorder={onProjectReorder}
+                      renderItem={(project) => {
+                        const isExpandedProject =
+                          expandedProjects[project._id] ?? project._id === activeProjectId;
+                        const requestCount =
+                          project.requests.length +
+                          project.folders.reduce(
+                            (total, folder) => total + folder.requests.length,
+                            0,
+                          );
+                        const projectMeta = [
+                          formatCount(project.folders.length, "folder"),
+                          formatCount(requestCount, "request"),
+                        ].join(" • ");
+
+                        return (
+                          <div className="rounded-lg border border-white/8 bg-slate-950/30 p-2.5">
+                            <div
+                              className={cn(
+                                "group relative rounded-lg px-2 py-2 transition",
+                                project._id === activeProjectId
+                                  ? "bg-white/[0.06]"
+                                  : "hover:bg-white/[0.05]",
+                              )}
+                            >
+                              <div className="flex items-start gap-2 pr-10">
+                                <button
+                                  className="mt-0.5 rounded-md p-1 text-muted transition hover:bg-white/8 hover:text-foreground"
+                                  onClick={() =>
+                                    setExpandedProjects((state) => ({
+                                      ...state,
+                                      [project._id]: !isExpandedProject,
+                                    }))
+                                  }
+                                  type="button"
+                                >
+                                  {isExpandedProject ? (
+                                    <ChevronDown className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <ChevronRight className="h-3.5 w-3.5" />
+                                  )}
+                                </button>
+                                <button
+                                  className="min-w-0 flex-1 text-left"
+                                  onClick={() => {
+                                    setExpandedProjects((state) => ({
+                                      ...state,
+                                      [project._id]: true,
+                                    }));
+                                    if (project.isPasswordProtected) {
+                                      onUnlockProject(project._id);
+                                      return;
+                                    }
+                                    onSelectProject(project._id);
+                                  }}
+                                  type="button"
+                                >
+                                  <TreeNodeContent
+                                    icon={<Workflow className="h-4 w-4 text-sky-300" />}
+                                    name={project.name}
+                                    meta={projectMeta}
+                                    accessory={
+                                      project.isPasswordProtected ? (
+                                        <LockIcon locked={project.isPasswordProtected} />
+                                      ) : null
+                                    }
+                                  />
+                                </button>
+                              </div>
+                              <ContextMenus
+                                onCreate={() => onCreateRequest(project._id)}
+                                onDuplicate={() => onDuplicateProject(project._id)}
+                                onDelete={() => onDeleteProject(project._id)}
+                              />
+                            </div>
+                            {isExpandedProject ? (
+                              <div className="mt-2 space-y-1.5 border-l border-white/8 pl-3">
+                                {project.requests.length > 0 ? (
+                                  <ReorderableList
+                                    items={[...project.requests].sort(
+                                      (a, b) => a.order - b.order,
+                                    )}
+                                    onReorder={onRequestReorder}
+                                    renderItem={(request) => (
+                                      <RequestItem
+                                        request={request}
+                                        activeRequestId={activeRequestId}
+                                        onSelectRequest={onSelectRequest}
+                                        onDuplicateRequest={onDuplicateRequest}
+                                        onDeleteRequest={onDeleteRequest}
+                                      />
+                                    )}
+                                  />
+                                ) : null}
+                                <ReorderableList
+                                  items={[...project.folders].sort(
+                                    (a, b) => a.order - b.order,
+                                  )}
+                                  onReorder={(orderedIds) =>
+                                    onFolderReorder(project._id, orderedIds)
+                                  }
+                                  renderItem={(folder) => {
+                                    const isExpandedFolder =
+                                      expandedFolders[folder._id] ?? true;
+                                    return (
+                                      <div className="rounded-lg border border-white/8 bg-white/[0.03] p-2.5">
+                                        <div className="group relative rounded-lg px-2 py-2 transition hover:bg-white/[0.05]">
+                                          <div className="flex items-start gap-2 pr-10">
+                                            <button
+                                              className="mt-0.5 rounded-md p-1 text-muted transition hover:bg-white/8 hover:text-foreground"
+                                              onClick={() =>
+                                                setExpandedFolders((state) => ({
+                                                  ...state,
+                                                  [folder._id]: !isExpandedFolder,
+                                                }))
+                                              }
+                                              type="button"
+                                            >
+                                              {isExpandedFolder ? (
+                                                <ChevronDown className="h-3.5 w-3.5" />
+                                              ) : (
+                                                <ChevronRight className="h-3.5 w-3.5" />
+                                              )}
+                                            </button>
+                                            <div className="min-w-0 flex-1">
+                                              <TreeNodeContent
+                                                icon={
+                                                  isExpandedFolder ? (
+                                                    <Folder className="h-4 w-4 text-amber-300" />
+                                                  ) : (
+                                                    <FolderClosed className="h-4 w-4 text-amber-300" />
+                                                  )
+                                                }
+                                                name={folder.name}
+                                                meta={formatCount(
+                                                  folder.requests.length,
+                                                  "request",
+                                                )}
+                                              />
+                                            </div>
+                                          </div>
+                                          <ContextMenus
+                                            onCreate={() =>
+                                              onCreateRequest(project._id, folder._id)
+                                            }
+                                            onDuplicate={() =>
+                                              onDuplicateFolder(folder._id)
+                                            }
+                                            onDelete={() => onDeleteFolder(folder._id)}
+                                          />
+                                        </div>
+                                        {isExpandedFolder ? (
+                                          <div className="mt-2 space-y-1.5 border-l border-white/8 pl-3">
+                                            {folder.requests.map((request) => (
+                                              <RequestItem
+                                                key={request._id}
+                                                request={request}
+                                                activeRequestId={activeRequestId}
+                                                onSelectRequest={onSelectRequest}
+                                                onDuplicateRequest={onDuplicateRequest}
+                                                onDeleteRequest={onDeleteRequest}
+                                              />
+                                            ))}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    );
+                                  }}
+                                />
+                                <Button
+                                  variant="ghost"
+                                  className="w-full justify-start rounded-lg border border-dashed border-white/10 bg-white/[0.03] py-2 text-foreground hover:bg-white/[0.07]"
+                                  onClick={() => onCreateFolder(project._id)}
+                                >
+                                  <Plus className="h-4 w-4" />
+                                  Add Folder
+                                </Button>
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      }}
+                    />
+                  </div>
+                ) : null}
+              </div>
+            );
+          }}
         />
       </CardContent>
     </Card>
   );
 }
+
+

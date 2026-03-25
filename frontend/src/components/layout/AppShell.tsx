@@ -1,8 +1,15 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Layers3, LogOut, Send, Workflow } from "lucide-react";
 import type { AdminUser, User } from "@restify/shared";
+import { cn } from "../../lib/cn";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+
+const SIDEBAR_WIDTH_KEY = "restify.sidebar-width";
+const DEFAULT_SIDEBAR_WIDTH = 380;
+const MIN_SIDEBAR_WIDTH = 280;
+const MAX_SIDEBAR_WIDTH = 620;
 
 interface AppShellProps {
   user: AdminUser | User;
@@ -21,6 +28,14 @@ interface ActiveContextPanelProps {
   label: string;
   value?: string;
   emptyLabel: string;
+}
+
+function clampSidebarWidth(width: number, maxWidth = MAX_SIDEBAR_WIDTH) {
+  return Math.min(maxWidth, Math.max(MIN_SIDEBAR_WIDTH, Math.round(width)));
+}
+
+function getSidebarMaxWidth(containerWidth: number) {
+  return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, containerWidth - 520));
 }
 
 function ActiveContextPanel({
@@ -56,6 +71,108 @@ export function AppShell({
   inspector,
   onLogout,
 }: AppShellProps) {
+  const mainRef = useRef<HTMLElement | null>(null);
+  const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const storedWidth = window.localStorage.getItem(SIDEBAR_WIDTH_KEY);
+      if (!storedWidth) {
+        return;
+      }
+
+      const parsedWidth = Number(storedWidth);
+      if (!Number.isNaN(parsedWidth)) {
+        setSidebarWidth(clampSidebarWidth(parsedWidth));
+      }
+    } catch {
+      return;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth));
+    } catch {
+      return;
+    }
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    const clampToViewport = () => {
+      const containerWidth = mainRef.current?.getBoundingClientRect().width;
+      if (!containerWidth) {
+        return;
+      }
+
+      setSidebarWidth((currentWidth) =>
+        clampSidebarWidth(currentWidth, getSidebarMaxWidth(containerWidth)),
+      );
+    };
+
+    clampToViewport();
+    window.addEventListener("resize", clampToViewport);
+    return () => window.removeEventListener("resize", clampToViewport);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizingSidebar) {
+      return;
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const bounds = mainRef.current?.getBoundingClientRect();
+      if (!bounds) {
+        return;
+      }
+
+      const nextWidth = event.clientX - bounds.left;
+      setSidebarWidth(
+        clampSidebarWidth(nextWidth, getSidebarMaxWidth(bounds.width)),
+      );
+    };
+
+    const stopResizing = () => setIsResizingSidebar(false);
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", stopResizing);
+
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", stopResizing);
+    };
+  }, [isResizingSidebar]);
+
+  const mainStyle = useMemo(
+    () =>
+      ({
+        "--sidebar-width": `${sidebarWidth}px`,
+      }) as CSSProperties,
+    [sidebarWidth],
+  );
+
+  const handleResizeStart = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (typeof window !== "undefined" && window.innerWidth <= 1280) {
+      return;
+    }
+
+    event.preventDefault();
+    setIsResizingSidebar(true);
+  };
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-white/10 bg-slate-950/70 px-5 py-4 backdrop-blur">
@@ -100,9 +217,37 @@ export function AppShell({
           </div>
         </div>
       </header>
-      <main className="grid min-h-0 flex-1 grid-cols-[380px_minmax(0,1fr)_340px] gap-5 p-5 max-[1500px]:grid-cols-[350px_minmax(0,1fr)_320px] max-[1280px]:grid-cols-1">
-        <aside className="min-h-0">{sidebar}</aside>
-        <section className="grid min-h-0 grid-rows-[minmax(0,1fr)_minmax(280px,40%)] gap-4">{builder}{response}</section>
+      <main
+        ref={mainRef}
+        style={mainStyle}
+        className="grid min-h-0 flex-1 grid-cols-[var(--sidebar-width)_minmax(0,1fr)_340px] gap-5 p-5 max-[1500px]:grid-cols-[var(--sidebar-width)_minmax(0,1fr)_320px] max-[1280px]:grid-cols-1"
+      >
+        <aside className="relative min-h-0">
+          {sidebar}
+          <button
+            className="group absolute -right-4 top-0 flex h-full w-8 cursor-col-resize items-center justify-center max-[1280px]:hidden"
+            onPointerDown={handleResizeStart}
+            type="button"
+            aria-label="Resize sidebar"
+          >
+            <span
+              className={cn(
+                "h-full w-px transition",
+                isResizingSidebar ? "bg-accent/80" : "bg-white/10",
+              )}
+            />
+            <span
+              className={cn(
+                "absolute left-1/2 top-1/2 h-14 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/10 bg-slate-950/90 opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-visible:opacity-100",
+                isResizingSidebar && "border-accent/30 bg-accent/20 opacity-100",
+              )}
+            />
+          </button>
+        </aside>
+        <section className="grid min-h-0 grid-rows-[minmax(0,1fr)_minmax(280px,40%)] gap-4">
+          {builder}
+          {response}
+        </section>
         <aside className="min-h-0 overflow-y-auto">{inspector}</aside>
       </main>
     </div>
