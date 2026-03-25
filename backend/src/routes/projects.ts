@@ -8,7 +8,6 @@ import {
   toObjectId,
   workspaceDataCollection,
 } from "../db/collections.js";
-import { comparePassword, hashPassword } from "../lib/password.js";
 import {
   canAccessWorkspace,
   canManageProject,
@@ -79,10 +78,6 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
         throw app.httpErrors.forbidden(
           "You cannot create projects in this workspace",
         );
-      }
-
-      if (workspace.isPasswordProtected) {
-        await app.assertWorkspaceUnlocked(request, workspace);
       }
 
       const now = isoNow();
@@ -255,99 +250,6 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  app.post<{
-    Params: { projectId: string };
-    Body: { workspaceId: string; password: string };
-  }>(
-    "/projects/:projectId/unlock",
-    { preHandler: app.authenticate },
-    async (request) => {
-      const workspace = await requireWorkspace(app, request.body.workspaceId);
-      const project = await requireProject(
-        app,
-        workspace._id,
-        request.params.projectId,
-      );
-      const user = getRequiredUser(request);
-      if (!canAccessWorkspace(user, workspace)) {
-        throw app.httpErrors.forbidden(
-          "You do not have access to this workspace",
-        );
-      }
-
-      if (workspace.isPasswordProtected) {
-        await app.assertWorkspaceUnlocked(request, workspace);
-      }
-
-      if (
-        user.role !== "superadmin" &&
-        !(await comparePassword(request.body.password, project.passwordHash))
-      ) {
-        throw app.httpErrors.unauthorized("Invalid project password");
-      }
-
-      return {
-        token: await app.issueUnlockToken({
-          scope: "project",
-          resourceId: project._id,
-          workspaceId: workspace._id,
-          projectId: project._id,
-        }),
-        scope: "project",
-        resourceId: project._id,
-        expiresAt: new Date(
-          Date.now() + app.config.unlockTtlMinutes * 60_000,
-        ).toISOString(),
-      };
-    },
-  );
-
-  app.put<{
-    Params: { projectId: string };
-    Body: { workspaceId: string; enabled: boolean; password?: string };
-  }>(
-    "/projects/:projectId/security",
-    { preHandler: app.authenticate },
-    async (request) => {
-      const workspace = await requireWorkspace(app, request.body.workspaceId);
-      const project = await requireProject(
-        app,
-        workspace._id,
-        request.params.projectId,
-      );
-      const user = getRequiredUser(request);
-      if (!canManageProject(user, project, workspace)) {
-        throw app.httpErrors.forbidden(
-          "Only the project owner, workspace owner, or superadmin can manage project security",
-        );
-      }
-
-      const enabled = Boolean(request.body.enabled);
-      if (enabled && !request.body.password) {
-        throw app.httpErrors.badRequest(
-          "A password is required to enable project protection",
-        );
-      }
-
-      await workspaceDataCollection(app.mongo, workspace._id).updateOne(
-        { _id: toObjectId(project._id) },
-        {
-          $set: {
-            isPasswordProtected: enabled,
-            passwordHash: enabled
-              ? await hashPassword(request.body.password ?? "")
-              : null,
-            updatedAt: isoNow(),
-          },
-        },
-      );
-
-      return {
-        project: await requireProject(app, workspace._id, project._id),
-      };
-    },
-  );
-
   app.delete<{
     Params: { projectId: string };
     Querystring: { workspaceId: string };
@@ -378,4 +280,3 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
 };
 
 export default projectRoutes;
-

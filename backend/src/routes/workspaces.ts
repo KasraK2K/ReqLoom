@@ -13,7 +13,6 @@ import {
   workspaceDataCollection,
   workspaceMetaCollection,
 } from "../db/collections.js";
-import { comparePassword, hashPassword } from "../lib/password.js";
 import {
   canAccessWorkspace,
   canManageWorkspace,
@@ -231,81 +230,6 @@ const workspaceRoutes: FastifyPluginAsync = async (app) => {
       );
 
       return { success: true };
-    },
-  );
-
-  app.post<{ Params: { workspaceId: string }; Body: { password: string } }>(
-    "/workspaces/:workspaceId/unlock",
-    { preHandler: app.authenticate },
-    async (request) => {
-      const user = getRequiredUser(request);
-      const workspace = await requireWorkspace(app, request.params.workspaceId);
-      if (!canAccessWorkspace(user, workspace)) {
-        throw app.httpErrors.forbidden(
-          "You do not have access to this workspace",
-        );
-      }
-
-      if (
-        user.role !== "superadmin" &&
-        !(await comparePassword(request.body.password, workspace.passwordHash))
-      ) {
-        throw app.httpErrors.unauthorized("Invalid workspace password");
-      }
-
-      return {
-        token: await app.issueUnlockToken({
-          scope: "workspace",
-          resourceId: workspace._id,
-          workspaceId: workspace._id,
-        }),
-        scope: "workspace",
-        resourceId: workspace._id,
-        expiresAt: new Date(
-          Date.now() + app.config.unlockTtlMinutes * 60_000,
-        ).toISOString(),
-      };
-    },
-  );
-
-  app.put<{
-    Params: { workspaceId: string };
-    Body: { enabled: boolean; password?: string };
-  }>(
-    "/workspaces/:workspaceId/security",
-    { preHandler: app.authenticate },
-    async (request) => {
-      const user = getRequiredUser(request);
-      const workspace = await requireWorkspace(app, request.params.workspaceId);
-      if (!canManageWorkspace(user, workspace)) {
-        throw app.httpErrors.forbidden(
-          "Only the workspace owner or superadmin can manage workspace security",
-        );
-      }
-
-      const enabled = Boolean(request.body.enabled);
-      if (enabled && !request.body.password) {
-        throw app.httpErrors.badRequest(
-          "A password is required to enable workspace protection",
-        );
-      }
-
-      await workspaceMetaCollection(app.mongo).updateOne(
-        { _id: toObjectId(workspace._id) },
-        {
-          $set: {
-            isPasswordProtected: enabled,
-            passwordHash: enabled
-              ? await hashPassword(request.body.password ?? "")
-              : null,
-            updatedAt: isoNow(),
-          },
-        },
-      );
-
-      return {
-        workspace: await requireWorkspace(app, workspace._id),
-      };
     },
   );
 

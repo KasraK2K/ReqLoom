@@ -2,7 +2,6 @@ import type { RequestDoc, WorkspaceMeta, WorkspaceTree } from "@restify/shared";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { api } from "../lib/http-client";
-import { useUnlockTokenStore } from "./unlockTokens";
 
 type TreeProject = WorkspaceTree["projects"][number];
 
@@ -72,8 +71,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         }));
       },
       loadWorkspaceTree: async (workspaceId) => {
-        const token = useUnlockTokenStore.getState().getWorkspaceToken(workspaceId);
-        const { tree } = await api.getWorkspaceTree(workspaceId, token);
+        const { tree } = await api.getWorkspaceTree(workspaceId);
         set((state) => {
           const activeProjectId =
             tree.projects.find((project) => project._id === state.activeProjectId)

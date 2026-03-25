@@ -11,7 +11,6 @@ import type {
   ProjectDoc,
   ProjectEnvVar,
   RequestDoc,
-  UnlockResponse,
   User,
   WorkspaceMeta,
   WorkspaceTreeResponse,
@@ -61,10 +60,8 @@ export const api = {
       body: JSON.stringify({}),
     }),
   listWorkspaces: () => requestJson<ListWorkspacesResponse>("/workspaces"),
-  getWorkspaceTree: (workspaceId: string, unlockToken?: string) =>
-    requestJson<WorkspaceTreeResponse>(`/workspaces/${workspaceId}/tree`, {
-      headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined,
-    }),
+  getWorkspaceTree: (workspaceId: string) =>
+    requestJson<WorkspaceTreeResponse>(`/workspaces/${workspaceId}/tree`),
   createWorkspace: (name: string) =>
     requestJson<{ workspace: WorkspaceMeta }>("/workspaces", {
       method: "POST",
@@ -85,132 +82,62 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ orderedIds }),
     }),
-  unlockWorkspace: (workspaceId: string, password: string) =>
-    requestJson<UnlockResponse>(`/workspaces/${workspaceId}/unlock`, {
-      method: "POST",
-      body: JSON.stringify({ password }),
-    }),
-  updateWorkspaceSecurity: (
-    workspaceId: string,
-    enabled: boolean,
-    password?: string,
-  ) =>
-    requestJson<{ workspace: WorkspaceMeta }>(
-      `/workspaces/${workspaceId}/security`,
-      {
-        method: "PUT",
-        body: JSON.stringify({ enabled, password }),
-      },
-    ),
   deleteWorkspace: (workspaceId: string) =>
     requestJson<{ success: boolean }>(`/workspaces/${workspaceId}`, {
       method: "DELETE",
     }),
-  createProject: (workspaceId: string, name: string, unlockToken?: string) =>
+  createProject: (workspaceId: string, name: string) =>
     requestJson<{ project: ProjectDoc }>("/projects", {
       method: "POST",
       body: JSON.stringify({ workspaceId, name }),
-      headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined,
     }),
   updateProject: (
     projectId: string,
     workspaceId: string,
     values: { name?: string; envVars?: ProjectEnvVar[] },
-    unlockToken?: string,
   ) =>
     requestJson<{ project: ProjectDoc }>(`/projects/${projectId}`, {
       method: "PATCH",
       body: JSON.stringify({ workspaceId, ...values }),
-      headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined,
     }),
-  duplicateProject: (
-    projectId: string,
-    workspaceId: string,
-    unlockToken?: string,
-  ) =>
+  duplicateProject: (projectId: string, workspaceId: string) =>
     requestJson<{ project: ProjectDoc }>(`/projects/${projectId}/duplicate`, {
       method: "POST",
       body: JSON.stringify({ workspaceId }),
-      headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined,
     }),
-  reorderProjects: (
-    workspaceId: string,
-    orderedIds: string[],
-    unlockToken?: string,
-  ) =>
+  reorderProjects: (workspaceId: string, orderedIds: string[]) =>
     requestJson<{ success: boolean }>("/projects/reorder", {
       method: "POST",
       body: JSON.stringify({ workspaceId, orderedIds }),
-      headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined,
-    }),
-  unlockProject: (
-    projectId: string,
-    workspaceId: string,
-    password: string,
-    unlockToken?: string,
-  ) =>
-    requestJson<UnlockResponse>(`/projects/${projectId}/unlock`, {
-      method: "POST",
-      body: JSON.stringify({ workspaceId, password }),
-      headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined,
-    }),
-  updateProjectSecurity: (
-    projectId: string,
-    workspaceId: string,
-    enabled: boolean,
-    password?: string,
-  ) =>
-    requestJson<{ project: ProjectDoc }>(`/projects/${projectId}/security`, {
-      method: "PUT",
-      body: JSON.stringify({ workspaceId, enabled, password }),
     }),
   deleteProject: (projectId: string, workspaceId: string) =>
     requestJson<{ success: boolean }>(
       `/projects/${projectId}?workspaceId=${workspaceId}`,
       { method: "DELETE" },
     ),
-  createFolder: (
-    workspaceId: string,
-    projectId: string,
-    name: string,
-    unlockToken?: string,
-  ) =>
+  createFolder: (workspaceId: string, projectId: string, name: string) =>
     requestJson<{ folder: FolderDoc }>("/folders", {
       method: "POST",
       body: JSON.stringify({ workspaceId, projectId, name }),
-      headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined,
     }),
-  updateFolder: (
-    folderId: string,
-    workspaceId: string,
-    name: string,
-    unlockToken?: string,
-  ) =>
+  updateFolder: (folderId: string, workspaceId: string, name: string) =>
     requestJson<{ folder: FolderDoc }>(`/folders/${folderId}`, {
       method: "PATCH",
       body: JSON.stringify({ workspaceId, name }),
-      headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined,
     }),
-  duplicateFolder: (
-    folderId: string,
-    workspaceId: string,
-    unlockToken?: string,
-  ) =>
+  duplicateFolder: (folderId: string, workspaceId: string) =>
     requestJson<{ folder: FolderDoc }>(`/folders/${folderId}/duplicate`, {
       method: "POST",
       body: JSON.stringify({ workspaceId }),
-      headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined,
     }),
   reorderFolders: (
     workspaceId: string,
     projectId: string,
     orderedIds: string[],
-    unlockToken?: string,
   ) =>
     requestJson<{ success: boolean }>("/folders/reorder", {
       method: "POST",
       body: JSON.stringify({ workspaceId, projectId, orderedIds }),
-      headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined,
     }),
   deleteFolder: (folderId: string, workspaceId: string) =>
     requestJson<{ success: boolean }>(
@@ -222,62 +149,42 @@ export const api = {
       RequestDoc,
       "_id" | "entityType" | "responseHistory" | "createdAt" | "updatedAt"
     >,
-    unlockToken?: string,
   ) =>
     requestJson<{ request: RequestDoc }>("/requests", {
       method: "POST",
       body: JSON.stringify(payload),
-      headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined,
     }),
   updateRequest: (
     requestId: string,
     payload: Partial<RequestDoc> & { workspaceId: string },
-    unlockToken?: string,
   ) =>
     requestJson<{ request: RequestDoc }>(`/requests/${requestId}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
-      headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined,
     }),
-  duplicateRequest: (
-    requestId: string,
-    workspaceId: string,
-    unlockToken?: string,
-  ) =>
+  duplicateRequest: (requestId: string, workspaceId: string) =>
     requestJson<{ request: RequestDoc }>(`/requests/${requestId}/duplicate`, {
       method: "POST",
       body: JSON.stringify({ workspaceId }),
-      headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined,
     }),
-  reorderRequests: (
-    workspaceId: string,
-    orderedIds: string[],
-    unlockToken?: string,
-  ) =>
+  reorderRequests: (workspaceId: string, orderedIds: string[]) =>
     requestJson<{ success: boolean }>("/requests/reorder", {
       method: "POST",
       body: JSON.stringify({ workspaceId, orderedIds }),
-      headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined,
     }),
   deleteRequest: (requestId: string, workspaceId: string) =>
     requestJson<{ success: boolean }>(
       `/requests/${requestId}?workspaceId=${workspaceId}`,
       { method: "DELETE" },
     ),
-  execute: (payload: ExecuteRequestPayload, unlockToken?: string) =>
+  execute: (payload: ExecuteRequestPayload) =>
     requestJson<ExecuteRequestResult>("/execute", {
       method: "POST",
       body: JSON.stringify(payload),
-      headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined,
     }),
-  getProjectHistory: (
-    projectId: string,
-    workspaceId: string,
-    unlockToken?: string,
-  ) =>
+  getProjectHistory: (projectId: string, workspaceId: string) =>
     requestJson<HistoryResponse>(
       `/projects/${projectId}/history?workspaceId=${workspaceId}`,
-      { headers: unlockToken ? { "X-Unlock-Token": unlockToken } : undefined },
     ),
   listUsers: () => requestJson<ListUsersResponse>("/admin/users"),
   createUser: (payload: {
@@ -308,4 +215,3 @@ export const api = {
       method: "DELETE",
     }),
 };
-

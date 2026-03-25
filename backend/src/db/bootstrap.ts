@@ -20,6 +20,22 @@ import {
 } from "./collections.js";
 import type { Db } from "mongodb";
 
+function sanitizeWorkspace(workspace: WorkspaceMeta): WorkspaceMeta {
+  return {
+    ...workspace,
+    passwordHash: null,
+    isPasswordProtected: false,
+  };
+}
+
+function sanitizeProject<T extends ProjectDoc>(project: T): T {
+  return {
+    ...project,
+    passwordHash: null,
+    isPasswordProtected: false,
+  };
+}
+
 export async function hasAnyAdmins(db: Db): Promise<boolean> {
   const count = await adminsCollection(db).countDocuments({}, { limit: 1 });
   return count > 0;
@@ -60,12 +76,12 @@ export async function listAccessibleWorkspaces(
   user: AdminUser | User,
 ): Promise<WorkspaceMeta[]> {
   if (user.role === "superadmin") {
-    return serializeDocs(
+    return (serializeDocs(
       await workspaceMetaCollection(db)
         .find({})
         .sort({ order: 1, createdAt: 1 })
         .toArray(),
-    ) as WorkspaceMeta[];
+    ) as WorkspaceMeta[]).map(sanitizeWorkspace);
   }
 
   const workspaces = await workspaceMetaCollection(db)
@@ -75,7 +91,7 @@ export async function listAccessibleWorkspaces(
     .sort({ order: 1, createdAt: 1 })
     .toArray();
 
-  return serializeDocs(workspaces) as WorkspaceMeta[];
+  return (serializeDocs(workspaces) as WorkspaceMeta[]).map(sanitizeWorkspace);
 }
 
 export async function getWorkspaceById(
@@ -85,7 +101,12 @@ export async function getWorkspaceById(
   const workspace = await workspaceMetaCollection(db)
     .findOne({ _id: toObjectId(workspaceId) })
     .catch(() => null);
-  return serializeDoc(workspace) as WorkspaceMeta | null;
+
+  if (!workspace) {
+    return null;
+  }
+
+  return sanitizeWorkspace(serializeDoc(workspace) as WorkspaceMeta);
 }
 
 export async function buildWorkspaceTree(
@@ -125,7 +146,7 @@ export async function buildWorkspaceTree(
       }));
 
     return {
-      ...project,
+      ...sanitizeProject(project),
       folders: projectFolders,
       requests: requests
         .filter(
@@ -136,7 +157,7 @@ export async function buildWorkspaceTree(
   });
 
   return {
-    workspace,
+    workspace: sanitizeWorkspace(workspace),
     projects: projectTree.sort((a, b) => a.order - b.order),
   };
 }

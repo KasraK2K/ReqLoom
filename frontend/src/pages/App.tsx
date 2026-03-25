@@ -1,10 +1,8 @@
-﻿import type { HistoryDoc, ProjectDoc, RequestDoc, User } from "@restify/shared";
-import { Activity, FileText, Settings2, Shield, Users } from "lucide-react";
+import type { HistoryDoc, RequestDoc, User } from "@restify/shared";
+import { Activity, FileText, Settings2, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { CreateSuperuserPage } from "../components/auth/CreateSuperuserPage";
 import { LoginPage } from "../components/auth/LoginPage";
-import { UnlockModal } from "../components/auth/UnlockModal";
-import { PasswordSettings } from "../components/admin/PasswordSettings";
 import { UserManagement } from "../components/admin/UserManagement";
 import { EnvVarEditor } from "../components/environment/EnvVarEditor";
 import { HistoryDetailsDialog } from "../components/history/HistoryDetailsDialog";
@@ -23,14 +21,12 @@ import { useActiveRequestStore } from "../store/activeRequest";
 import { useAuthStore } from "../store/auth";
 import { useEnvironmentStore } from "../store/environment";
 import { useHistoryStore } from "../store/history";
-import { useUnlockTokenStore } from "../store/unlockTokens";
 import { useWorkspaceStore } from "../store/workspaces";
 
 const INSPECTOR_TAB_STORAGE_KEY = "httpclient.inspector-tab";
 const INSPECTOR_TABS: InspectorTab[] = [
   "environment",
   "history",
-  "security",
   "admin",
 ];
 
@@ -55,18 +51,6 @@ function reportError(error: unknown) {
   const message =
     error instanceof Error ? error.message : "Something went wrong";
   window.alert(message);
-}
-
-function buildProjectToken(project?: ProjectDoc, workspaceId?: string) {
-  const unlockStore = useUnlockTokenStore.getState();
-  if (project?.isPasswordProtected) {
-    return unlockStore.getProjectToken(project._id);
-  }
-  return unlockStore.getWorkspaceToken(workspaceId);
-}
-
-function buildWorkspaceToken(workspaceId?: string) {
-  return useUnlockTokenStore.getState().getWorkspaceToken(workspaceId);
 }
 
 type CreateDialogState =
@@ -138,17 +122,11 @@ export default function App() {
   } = useActiveRequestStore();
   const { envVars, setEnvVars, getEnvVars } = useEnvironmentStore();
   const { historyByProject, setHistory } = useHistoryStore();
-  const { setWorkspaceToken, setProjectToken, clearAll } =
-    useUnlockTokenStore();
 
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>(
     getStoredInspectorTab,
   );
   const [users, setUsers] = useState<User[]>([]);
-  const [unlockTarget, setUnlockTarget] = useState<{
-    scope: "workspace" | "project";
-    id: string;
-  } | null>(null);
   const [createDialog, setCreateDialog] = useState<CreateDialogState>(null);
   const [renameDialog, setRenameDialog] = useState<RenameDialogState>(null);
   const [historyDetailsEntry, setHistoryDetailsEntry] = useState<HistoryDoc | null>(null);
@@ -250,14 +228,13 @@ export default function App() {
 
   useEffect(() => {
     if (!user) {
-      clearAll();
       setDraft(null);
       setResponse(null);
       return;
     }
 
     loadWorkspaces().catch(reportError);
-  }, [user, clearAll, loadWorkspaces, setDraft, setResponse]);
+  }, [user, loadWorkspaces, setDraft, setResponse]);
 
   useEffect(() => {
     if (!user || !activeWorkspaceId) {
@@ -278,11 +255,7 @@ export default function App() {
 
     setEnvVars(activeProject._id, activeProject.envVars);
     api
-      .getProjectHistory(
-        activeProject._id,
-        activeProject.workspaceId,
-        buildProjectToken(activeProject, activeProject.workspaceId),
-      )
+      .getProjectHistory(activeProject._id, activeProject.workspaceId)
       .then(({ history }) => setHistory(activeProject._id, history))
       .catch(() => undefined);
   }, [activeProject, setEnvVars, setHistory]);
@@ -470,7 +443,6 @@ export default function App() {
       const { project } = await api.createProject(
         createDialog.workspaceId,
         name,
-        buildWorkspaceToken(createDialog.workspaceId),
       );
       selectWorkspace(createDialog.workspaceId);
       selectProject(project._id);
@@ -479,15 +451,10 @@ export default function App() {
       return;
     }
 
-    const targetProject = trees[createDialog.workspaceId]?.projects.find(
-      (project) => project._id === createDialog.projectId,
-    );
-
     await api.createFolder(
       createDialog.workspaceId,
       createDialog.projectId,
       name,
-      buildProjectToken(targetProject, createDialog.workspaceId),
     );
     selectWorkspace(createDialog.workspaceId);
     selectProject(createDialog.projectId);
@@ -518,7 +485,6 @@ export default function App() {
         renameDialog.projectId,
         renameDialog.workspaceId,
         { name },
-        buildProjectToken(project, renameDialog.workspaceId),
       );
       await refreshTree(renameDialog.workspaceId);
       return;
@@ -537,7 +503,6 @@ export default function App() {
         renameDialog.folderId,
         renameDialog.workspaceId,
         name,
-        buildProjectToken(project, renameDialog.workspaceId),
       );
       await refreshTree(renameDialog.workspaceId);
       return;
@@ -554,7 +519,6 @@ export default function App() {
     await api.updateRequest(
       renameDialog.requestId,
       { workspaceId: renameDialog.workspaceId, name },
-      buildProjectToken(project, renameDialog.workspaceId),
     );
     await refreshTree(renameDialog.workspaceId);
   };
@@ -568,25 +532,22 @@ export default function App() {
       return;
     }
     const requestDraft = createEmptyRequest(project, folderId);
-    const { request } = await api.createRequest(
-      {
-        workspaceId: requestDraft.workspaceId,
-        projectId: requestDraft.projectId,
-        folderId: requestDraft.folderId,
-        name: requestDraft.name,
-        method: requestDraft.method,
-        url: requestDraft.url,
-        headers: requestDraft.headers,
-        params: requestDraft.params,
-        body: requestDraft.body,
-        auth: requestDraft.auth,
-        order: [
-          ...project.requests,
-          ...project.folders.flatMap((folder) => folder.requests),
-        ].length,
-      },
-      buildProjectToken(project, activeWorkspace._id),
-    );
+    const { request } = await api.createRequest({
+      workspaceId: requestDraft.workspaceId,
+      projectId: requestDraft.projectId,
+      folderId: requestDraft.folderId,
+      name: requestDraft.name,
+      method: requestDraft.method,
+      url: requestDraft.url,
+      headers: requestDraft.headers,
+      params: requestDraft.params,
+      body: requestDraft.body,
+      auth: requestDraft.auth,
+      order: [
+        ...project.requests,
+        ...project.folders.flatMap((folder) => folder.requests),
+      ].length,
+    });
     await refreshTree(activeWorkspace._id);
     selectProject(projectId);
     selectRequest(request._id);
@@ -596,27 +557,22 @@ export default function App() {
     if (!draft) {
       return;
     }
-    await api.updateRequest(
-      draft._id,
-      { ...draft, workspaceId: draft.workspaceId },
-      buildProjectToken(activeProject, draft.workspaceId),
-    );
+    await api.updateRequest(draft._id, {
+      ...draft,
+      workspaceId: draft.workspaceId,
+    });
     await refreshTree(draft.workspaceId);
   };
 
   const sendRequest = async (payload: Parameters<typeof api.execute>[0]) => {
     setSending(true);
     try {
-      const result = await api.execute(
-        payload,
-        buildProjectToken(activeProject, payload.workspaceId),
-      );
+      const result = await api.execute(payload);
       setResponse(result);
       if (activeProject) {
         const { history } = await api.getProjectHistory(
           activeProject._id,
           activeProject.workspaceId,
-          buildProjectToken(activeProject, activeProject.workspaceId),
         );
         setHistory(activeProject._id, history);
       }
@@ -631,12 +587,9 @@ export default function App() {
     if (!activeProject || !activeWorkspace) {
       return;
     }
-    await api.updateProject(
-      activeProject._id,
-      activeWorkspace._id,
-      { envVars: envVars[activeProject._id] ?? [] },
-      buildProjectToken(activeProject, activeWorkspace._id),
-    );
+    await api.updateProject(activeProject._id, activeWorkspace._id, {
+      envVars: envVars[activeProject._id] ?? [],
+    });
     await refreshTree(activeWorkspace._id);
   };
 
@@ -646,34 +599,6 @@ export default function App() {
     }
     const response = await api.listUsers();
     setUsers(response.users);
-  };
-
-  const handleUnlockSubmit = async (password: string) => {
-    if (!unlockTarget) {
-      return;
-    }
-
-    if (unlockTarget.scope === "workspace") {
-      const response = await api.unlockWorkspace(unlockTarget.id, password);
-      setWorkspaceToken(unlockTarget.id, response.token);
-      await refreshTree(unlockTarget.id);
-      selectWorkspace(unlockTarget.id);
-      return;
-    }
-
-    if (!activeWorkspace) {
-      return;
-    }
-
-    const response = await api.unlockProject(
-      unlockTarget.id,
-      activeWorkspace._id,
-      password,
-      buildWorkspaceToken(activeWorkspace._id),
-    );
-    setProjectToken(unlockTarget.id, response.token);
-    await refreshTree(activeWorkspace._id);
-    selectProject(unlockTarget.id);
   };
 
   const deleteEntity = async (label: string, action: () => Promise<void>) => {
@@ -823,11 +748,7 @@ export default function App() {
             onDuplicateProject={(projectId) =>
               activeWorkspace &&
               api
-                .duplicateProject(
-                  projectId,
-                  activeWorkspace._id,
-                  buildProjectToken(activeProject, activeWorkspace._id),
-                )
+                .duplicateProject(projectId, activeWorkspace._id)
                 .then(() => refreshTree(activeWorkspace._id))
                 .catch(reportError)
             }
@@ -842,11 +763,7 @@ export default function App() {
             onDuplicateFolder={(folderId) =>
               activeWorkspace &&
               api
-                .duplicateFolder(
-                  folderId,
-                  activeWorkspace._id,
-                  buildProjectToken(activeProject, activeWorkspace._id),
-                )
+                .duplicateFolder(folderId, activeWorkspace._id)
                 .then(() => refreshTree(activeWorkspace._id))
                 .catch(reportError)
             }
@@ -861,11 +778,7 @@ export default function App() {
             onDuplicateRequest={(requestId) =>
               activeWorkspace &&
               api
-                .duplicateRequest(
-                  requestId,
-                  activeWorkspace._id,
-                  buildProjectToken(activeProject, activeWorkspace._id),
-                )
+                .duplicateRequest(requestId, activeWorkspace._id)
                 .then(() => refreshTree(activeWorkspace._id))
                 .catch(reportError)
             }
@@ -883,11 +796,7 @@ export default function App() {
             onProjectReorder={(orderedIds) =>
               activeWorkspace &&
               api
-                .reorderProjects(
-                  activeWorkspace._id,
-                  orderedIds,
-                  buildWorkspaceToken(activeWorkspace._id),
-                )
+                .reorderProjects(activeWorkspace._id, orderedIds)
                 .then(() => refreshTree(activeWorkspace._id))
                 .catch(reportError)
             }
@@ -899,7 +808,6 @@ export default function App() {
                   activeWorkspace._id,
                   activeProject._id,
                   orderedIds,
-                  buildProjectToken(activeProject, activeWorkspace._id),
                 )
                 .then(() => refreshTree(activeWorkspace._id))
                 .catch(reportError)
@@ -907,19 +815,9 @@ export default function App() {
             onRequestReorder={(orderedIds) =>
               activeWorkspace &&
               api
-                .reorderRequests(
-                  activeWorkspace._id,
-                  orderedIds,
-                  buildProjectToken(activeProject, activeWorkspace._id),
-                )
+                .reorderRequests(activeWorkspace._id, orderedIds)
                 .then(() => refreshTree(activeWorkspace._id))
                 .catch(reportError)
-            }
-            onUnlockWorkspace={(workspaceId) =>
-              setUnlockTarget({ scope: "workspace", id: workspaceId })
-            }
-            onUnlockProject={(projectId) =>
-              setUnlockTarget({ scope: "project", id: projectId })
             }
           />
         }
@@ -957,14 +855,6 @@ export default function App() {
                 title="History"
               >
                 <Activity className="h-4 w-4" />
-              </TabsTrigger>
-              <TabsTrigger
-                value="security"
-                className="inline-flex h-9 w-9 items-center justify-center p-0"
-                aria-label="Security"
-                title="Security"
-              >
-                <Shield className="h-4 w-4" />
               </TabsTrigger>
               {user.role === "superadmin" ? (
                 <TabsTrigger
@@ -1035,35 +925,6 @@ export default function App() {
                 </CardContent>
               </Card>
             </TabsContent>
-            <TabsContent value="security">
-              <PasswordSettings
-                workspace={activeWorkspace}
-                project={activeProject}
-                onSaveWorkspace={(enabled, password) =>
-                  activeWorkspace
-                    ? api
-                        .updateWorkspaceSecurity(
-                          activeWorkspace._id,
-                          enabled,
-                          password,
-                        )
-                        .then(() => refreshWorkspaces())
-                    : Promise.resolve()
-                }
-                onSaveProject={(enabled, password) =>
-                  activeProject && activeWorkspace
-                    ? api
-                        .updateProjectSecurity(
-                          activeProject._id,
-                          activeWorkspace._id,
-                          enabled,
-                          password,
-                        )
-                        .then(() => refreshTree(activeWorkspace._id))
-                    : Promise.resolve()
-                }
-              />
-            </TabsContent>
             {user.role === "superadmin" ? (
               <TabsContent value="admin">
                 <UserManagement
@@ -1114,21 +975,6 @@ export default function App() {
         entry={historyDetailsEntry}
         open={Boolean(historyDetailsEntry)}
         onOpenChange={(open) => !open && setHistoryDetailsEntry(null)}
-      />
-      <UnlockModal
-        open={Boolean(unlockTarget)}
-        title={
-          unlockTarget?.scope === "workspace"
-            ? "Unlock Workspace"
-            : "Unlock Project"
-        }
-        description={
-          unlockTarget?.scope === "workspace"
-            ? "Enter the workspace password to load its contents."
-            : "Enter the project password to access its requests and settings."
-        }
-        onSubmit={handleUnlockSubmit}
-        onOpenChange={(open) => !open && setUnlockTarget(null)}
       />
     </>
   );

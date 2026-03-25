@@ -34,7 +34,6 @@ import { cn } from "../../lib/cn";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { ContextMenus } from "./ContextMenus";
-import { LockIcon } from "./LockIcon";
 
 type SortableItem = { _id: string };
 
@@ -67,8 +66,6 @@ interface WorkspaceTreeProps {
   onProjectReorder: (orderedIds: string[]) => void;
   onFolderReorder: (projectId: string, orderedIds: string[]) => void;
   onRequestReorder: (orderedIds: string[]) => void;
-  onUnlockWorkspace: (workspaceId: string) => void;
-  onUnlockProject: (projectId: string) => void;
 }
 
 function formatCount(value: number, singular: string, plural = `${singular}s`) {
@@ -252,8 +249,6 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     onProjectReorder,
     onFolderReorder,
     onRequestReorder,
-    onUnlockWorkspace,
-    onUnlockProject,
   } = props;
 
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>(
@@ -323,24 +318,13 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                     </button>
                     <button
                       className="min-w-0 flex-1 text-left"
-                      onClick={() => {
-                        if (workspace.isPasswordProtected) {
-                          onUnlockWorkspace(workspace._id);
-                          return;
-                        }
-                        onSelectWorkspace(workspace._id);
-                      }}
+                      onClick={() => onSelectWorkspace(workspace._id)}
                       type="button"
                     >
                       <TreeNodeContent
                         icon={<Layers3 className="h-3.5 w-3.5 text-accent" />}
                         name={workspace.name}
                         meta={workspaceMeta}
-                        accessory={
-                          workspace.isPasswordProtected ? (
-                            <LockIcon locked={workspace.isPasswordProtected} />
-                          ) : null
-                        }
                       />
                     </button>
                   </div>
@@ -409,10 +393,6 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                                       ...state,
                                       [project._id]: true,
                                     }));
-                                    if (project.isPasswordProtected) {
-                                      onUnlockProject(project._id);
-                                      return;
-                                    }
                                     onSelectProject(project._id);
                                   }}
                                   type="button"
@@ -421,11 +401,6 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                                     icon={<Workflow className="h-3.5 w-3.5 text-sky-300" />}
                                     name={project.name}
                                     meta={projectMeta}
-                                    accessory={
-                                      project.isPasswordProtected ? (
-                                        <LockIcon locked={project.isPasswordProtected} />
-                                      ) : null
-                                    }
                                   />
                                 </button>
                               </div>
