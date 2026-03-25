@@ -86,7 +86,7 @@ export function RequestBuilder({ draft, envVars, activeTab, isSending, onDraftCh
         </div>
       </CardHeader>
       <CardContent className="min-h-0 flex-1 space-y-4 overflow-auto">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 flex-nowrap items-start gap-3">
           <MethodSelector value={draft.method} onChange={(method) => updateDraft({ method })} />
           <div className="min-w-0 flex-1">
             <URLBar
@@ -128,4 +128,5 @@ export function RequestBuilder({ draft, envVars, activeTab, isSending, onDraftCh
     </Card>
   );
 }
+
 
