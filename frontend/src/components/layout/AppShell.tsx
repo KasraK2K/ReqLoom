@@ -530,7 +530,7 @@ export function AppShell({
         <aside className="relative min-h-0 overflow-hidden">
           {sidebar}
           <button
-            className="group absolute -right-4 top-0 flex h-full w-8 cursor-col-resize items-center justify-center max-[1280px]:hidden"
+            className="group absolute -right-4 inset-y-3 flex w-8 cursor-col-resize items-center justify-center max-[1280px]:hidden"
             onPointerDown={handleResizeStart}
             type="button"
             aria-label="Resize sidebar"
@@ -586,7 +586,7 @@ export function AppShell({
         >
           {!isInspectorCollapsed ? (
             <button
-              className="group absolute -left-4 top-0 z-10 flex h-full w-8 cursor-col-resize items-center justify-center max-[1280px]:hidden"
+              className="group absolute -left-4 inset-y-3 z-10 flex w-8 cursor-col-resize items-center justify-center max-[1280px]:hidden"
               onPointerDown={handleInspectorResizeStart}
               type="button"
               aria-label="Resize right sidebar"
@@ -655,5 +655,7 @@ export function AppShell({
     </div>
   );
 }
+
+
 
 
