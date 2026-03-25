@@ -179,7 +179,11 @@ function SortableTreeItem({
 
   const dragHandle = (
     <button
-      className="flex h-5 w-5 shrink-0 cursor-grab items-center justify-center rounded-md text-muted/60 transition hover:bg-white/8 hover:text-foreground active:cursor-grabbing touch-none"
+      className={cn(
+        "flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted/60 transition active:cursor-grabbing touch-none",
+        "cursor-grab opacity-0 pointer-events-none group-hover/tree-item:opacity-100 group-hover/tree-item:pointer-events-auto group-focus-within/tree-item:opacity-100 group-focus-within/tree-item:pointer-events-auto",
+        "hover:bg-white/8 hover:text-foreground",
+      )}
       {...attributes}
       {...listeners}
       type="button"
@@ -194,7 +198,7 @@ function SortableTreeItem({
       <div
         ref={setNodeRef}
         style={style}
-        className={cn("will-change-transform", isDragging && "z-30 opacity-45")}
+        className={cn("group/tree-item will-change-transform", isDragging && "z-30 opacity-45")}
       >
         {renderRow(dragHandle, isDragging)}
       </div>
