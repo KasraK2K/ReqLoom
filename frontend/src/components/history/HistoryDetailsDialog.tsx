@@ -1,6 +1,7 @@
-﻿import type { ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { HistoryDoc } from "@restify/shared";
 import { Copy } from "lucide-react";
+import { METHOD_STYLES } from "../../lib/methods";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Dialog } from "../ui/dialog";
@@ -206,7 +207,7 @@ export function HistoryDetailsDialog({
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="shrink-0 border-b border-white/8 px-5 py-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge className="bg-accent/12 text-accent">{entry.method}</Badge>
+            <Badge className={METHOD_STYLES[entry.method]}>{entry.method}</Badge>
             <Badge>{entry.status}</Badge>
             <Badge>{entry.durationMs} ms</Badge>
             <Badge>{formatBytes(entry.sizeBytes)}</Badge>

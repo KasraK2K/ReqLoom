@@ -10,4 +10,14 @@ export const METHOD_STYLES: Record<HttpMethod, string> = {
   OPTIONS: "bg-slate-500/15 text-slate-200 border-slate-400/20",
 };
 
+export const METHOD_TEXT_STYLES: Record<HttpMethod, string> = {
+  GET: "text-emerald-300",
+  POST: "text-sky-300",
+  PUT: "text-orange-300",
+  PATCH: "text-amber-300",
+  DELETE: "text-rose-300",
+  HEAD: "text-violet-300",
+  OPTIONS: "text-slate-200",
+};
+
 export const METHOD_OPTIONS = Object.keys(METHOD_STYLES) as HttpMethod[];

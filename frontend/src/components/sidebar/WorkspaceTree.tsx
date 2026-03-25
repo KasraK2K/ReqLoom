@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { cn } from "../../lib/cn";
+import { METHOD_TEXT_STYLES } from "../../lib/methods";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { ContextMenus } from "./ContextMenus";
@@ -195,7 +196,12 @@ function RequestItem({
       )}
     >
       <div className="flex items-center gap-1.5 px-1 py-0.5">
-        <span className="w-10 shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-300">
+        <span
+          className={cn(
+            "w-10 shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em]",
+            METHOD_TEXT_STYLES[request.method],
+          )}
+        >
           {request.method}
         </span>
         <button
