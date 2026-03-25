@@ -1,4 +1,4 @@
-﻿import type { ExecuteRequestPayload, ProjectEnvVar, RequestDoc } from "@restify/shared";
+import type { ExecuteRequestPayload, ProjectEnvVar, RequestDoc } from "@restify/shared";
 import { Save } from "lucide-react";
 import { useMemo } from "react";
 import { useCtrlEnter } from "../../hooks/use-ctrl-enter";
@@ -98,7 +98,7 @@ export function RequestBuilder({
         </div>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-        <div className="flex min-w-0 flex-nowrap items-start gap-3">
+        <div className="flex min-w-0 flex-col items-stretch gap-3 min-[860px]:flex-row min-[860px]:items-start">
           <MethodSelector
             value={draft.method}
             onChange={(method) => updateDraft({ method })}
@@ -120,7 +120,7 @@ export function RequestBuilder({
           onValueChange={(value) => onActiveTabChange(value as BuilderTab)}
           className="flex min-h-0 w-full flex-1 flex-col"
         >
-          <TabsList className="shrink-0 self-start">
+          <TabsList className="shrink-0 max-w-full flex-wrap self-start">
             <TabsTrigger value="body">Body</TabsTrigger>
             <TabsTrigger value="headers">Headers</TabsTrigger>
             <TabsTrigger value="auth">Auth</TabsTrigger>

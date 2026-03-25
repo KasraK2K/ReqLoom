@@ -1,4 +1,4 @@
-﻿import type { ReactNode } from "react";
+import type { ReactNode } from "react";
 import { cn } from "../../lib/cn";
 
 function renderValue(value: unknown): ReactNode {
@@ -58,8 +58,8 @@ export function JSONTree({
     return (
       <div
         className={cn(
-          "rounded-xl bg-slate-950/70 p-4 font-mono text-sm",
-          scrollable && "overflow-auto",
+          "rounded-xl bg-slate-950/70 p-4 font-mono text-sm text-slate-200 break-words",
+          scrollable && "h-full min-h-0 overflow-auto",
           className,
         )}
       >
@@ -71,7 +71,7 @@ export function JSONTree({
       <pre
         className={cn(
           "rounded-xl bg-slate-950/70 p-4 font-mono text-sm text-muted whitespace-pre-wrap break-all",
-          scrollable && "overflow-auto",
+          scrollable && "h-full min-h-0 overflow-auto",
           className,
         )}
       >

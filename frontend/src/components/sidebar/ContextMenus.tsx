@@ -178,7 +178,7 @@ export function ContextMenus({
     <>
       <div
         ref={rootRef}
-        className="absolute right-0 top-1/2 z-20 -translate-y-1/2"
+        className="pointer-events-none absolute right-0 top-1/2 z-20 -translate-y-1/2 opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
         onClick={(event) => event.stopPropagation()}
       >
         <button

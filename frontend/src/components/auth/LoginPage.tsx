@@ -47,7 +47,7 @@ export function LoginPage({ onSubmit }: LoginPageProps) {
           </div>
           <div className="space-y-2">
             <label className="text-sm text-muted">Password</label>
-            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="••••••••" />
+            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="********" />
           </div>
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}
           <Button className="w-full" onClick={handleSubmit} disabled={isSubmitting || !username || !password}>
@@ -59,4 +59,3 @@ export function LoginPage({ onSubmit }: LoginPageProps) {
     </div>
   );
 }
-

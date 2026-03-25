@@ -48,19 +48,42 @@ export function DropdownSelect<T extends string>({
   renderOption,
 }: DropdownSelectProps<T>) {
   const [open, setOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [menuPosition, setMenuPosition] = useState({
     top: 0,
     left: 0,
     width: menuWidth ?? 0,
+    maxHeight: menuMaxHeight,
   });
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
-  const selectedOption = useMemo(
-    () => options.find((option) => option.value === value) ?? options[0],
+  const selectedIndex = useMemo(
+    () => options.findIndex((option) => option.value === value),
     [options, value],
   );
+  const selectedOption = useMemo(
+    () => options[selectedIndex] ?? options[0],
+    [options, selectedIndex],
+  );
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    setHighlightedIndex(selectedIndex >= 0 ? selectedIndex : 0);
+  }, [open, selectedIndex]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    optionRefs.current[highlightedIndex]?.scrollIntoView({ block: "nearest" });
+  }, [highlightedIndex, open]);
 
   useEffect(() => {
     if (!open) {
@@ -75,21 +98,25 @@ export function DropdownSelect<T extends string>({
 
       const rect = trigger.getBoundingClientRect();
       const width = menuWidth ?? rect.width;
-      const availableBelow = window.innerHeight - rect.bottom - VIEWPORT_GAP;
-      const desiredHeight = Math.min(menuMaxHeight, availableBelow);
-      const showAbove = desiredHeight < 180 && rect.top > availableBelow;
+      const availableBelow = Math.max(
+        0,
+        window.innerHeight - rect.bottom - VIEWPORT_GAP - 4,
+      );
+      const availableAbove = Math.max(0, rect.top - VIEWPORT_GAP - 4);
+      const showAbove = availableBelow < 180 && availableAbove > availableBelow;
+      const maxHeight = Math.max(
+        72,
+        Math.min(menuMaxHeight, showAbove ? availableAbove : availableBelow),
+      );
       const top = showAbove
-        ? Math.max(
-            VIEWPORT_GAP,
-            rect.top - Math.min(menuMaxHeight, rect.top - VIEWPORT_GAP) - 4,
-          )
-        : rect.bottom + 4;
+        ? Math.max(VIEWPORT_GAP, rect.top - maxHeight - 4)
+        : Math.min(rect.bottom + 4, window.innerHeight - VIEWPORT_GAP - maxHeight);
       const left = Math.max(
         VIEWPORT_GAP,
         Math.min(rect.left, window.innerWidth - width - VIEWPORT_GAP),
       );
 
-      setMenuPosition({ top, left, width });
+      setMenuPosition({ top, left, width, maxHeight });
     };
 
     const handlePointerDown = (event: PointerEvent) => {
@@ -104,7 +131,56 @@ export function DropdownSelect<T extends string>({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
+        event.preventDefault();
         setOpen(false);
+        triggerRef.current?.focus();
+        return;
+      }
+
+      if (event.key === "Tab") {
+        setOpen(false);
+        return;
+      }
+
+      if (options.length === 0) {
+        return;
+      }
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setHighlightedIndex((current) => (current + 1) % options.length);
+        return;
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setHighlightedIndex((current) =>
+          (current - 1 + options.length) % options.length,
+        );
+        return;
+      }
+
+      if (event.key === "Home") {
+        event.preventDefault();
+        setHighlightedIndex(0);
+        return;
+      }
+
+      if (event.key === "End") {
+        event.preventDefault();
+        setHighlightedIndex(options.length - 1);
+        return;
+      }
+
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        const option = options[highlightedIndex];
+        if (!option) {
+          return;
+        }
+        onChange(option.value);
+        setOpen(false);
+        triggerRef.current?.focus();
       }
     };
 
@@ -120,13 +196,22 @@ export function DropdownSelect<T extends string>({
       window.removeEventListener("pointerdown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [menuMaxHeight, menuWidth, open]);
+  }, [highlightedIndex, menuMaxHeight, menuWidth, onChange, open, options]);
+
+  useEffect(() => {
+    if (open) {
+      menuRef.current?.focus();
+    }
+  }, [open]);
 
   const menu =
     open && typeof document !== "undefined"
       ? createPortal(
           <div
             ref={menuRef}
+            role="listbox"
+            aria-label={ariaLabel}
+            tabIndex={-1}
             style={{
               top: menuPosition.top,
               left: menuPosition.left,
@@ -134,20 +219,33 @@ export function DropdownSelect<T extends string>({
             }}
             className={cn("app-dropdown-surface", menuClassName)}
           >
-            <div style={{ maxHeight: menuMaxHeight }} className="overflow-y-auto">
-              {options.map((option) => {
+            <div
+              style={{ maxHeight: menuPosition.maxHeight }}
+              className="overflow-y-auto"
+            >
+              {options.map((option, index) => {
                 const isSelected = option.value === value;
+                const isHighlighted = index === highlightedIndex;
+
                 return (
                   <button
                     key={option.value}
+                    ref={(element) => {
+                      optionRefs.current[index] = element;
+                    }}
+                    role="option"
+                    aria-selected={isSelected}
                     className={cn(
                       "app-dropdown-item",
+                      isHighlighted && !isSelected && "bg-white/[0.08] text-foreground",
                       itemClassName,
                       getItemClassName?.(option, isSelected),
                     )}
+                    onMouseEnter={() => setHighlightedIndex(index)}
                     onClick={() => {
                       onChange(option.value);
                       setOpen(false);
+                      triggerRef.current?.focus();
                     }}
                     type="button"
                   >
@@ -172,14 +270,34 @@ export function DropdownSelect<T extends string>({
             selectedOption ? getTriggerClassName?.(selectedOption) : undefined,
           )}
           onClick={() => setOpen((current) => !current)}
+          onKeyDown={(event) => {
+            if (options.length === 0) {
+              return;
+            }
+
+            if (["ArrowDown", "ArrowUp", "Enter", " "].includes(event.key)) {
+              event.preventDefault();
+              setOpen(true);
+              setHighlightedIndex(
+                event.key === "ArrowUp"
+                  ? Math.max(options.length - 1, 0)
+                  : selectedIndex >= 0
+                    ? selectedIndex
+                    : 0,
+              );
+            }
+          }}
           type="button"
           aria-label={ariaLabel}
           aria-expanded={open}
+          aria-haspopup="listbox"
         >
           <span className="truncate">
             {selectedOption ? selectedOption.label : value}
           </span>
-          <ChevronDown className={cn("h-4 w-4 shrink-0 transition", open && "rotate-180")} />
+          <ChevronDown
+            className={cn("h-4 w-4 shrink-0 transition", open && "rotate-180")}
+          />
         </button>
       </div>
       {menu}

@@ -21,7 +21,7 @@ export function URLBar({
 }: URLBarProps) {
   return (
     <div className="min-w-0 flex-1 space-y-2.5">
-      <div className="flex min-w-0 items-center gap-2.5">
+      <div className="flex min-w-0 flex-col gap-2.5 min-[980px]:flex-row min-[980px]:items-center">
         <Input
           value={value}
           onChange={(event) => onChange(event.target.value)}
@@ -29,7 +29,7 @@ export function URLBar({
           placeholder="https://api.example.com/users/{{userId}}"
         />
         <Button
-          className="h-11 shrink-0"
+          className="h-11 shrink-0 justify-center min-[980px]:px-4"
           onClick={onSend}
           disabled={isSending || !value.trim()}
         >

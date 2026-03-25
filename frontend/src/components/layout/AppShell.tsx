@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   CSSProperties,
   PointerEvent as ReactPointerEvent,
   ReactNode,
@@ -109,12 +109,12 @@ function ContextCrumb({
 
   return (
     <div
-      className="flex min-w-0 items-center gap-1.5"
+      className="flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-white/8 bg-white/[0.03] px-2 py-1"
       title={`${label}: ${displayValue}`}
     >
       <span
         className={cn(
-          "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] text-accent",
+          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-slate-950/70 text-accent",
           isCurrent && "border-accent/25 bg-accent/10",
         )}
       >
@@ -122,7 +122,7 @@ function ContextCrumb({
       </span>
       <span
         className={cn(
-          "truncate text-sm leading-6",
+          "truncate text-[13px] leading-5",
           value
             ? isCurrent
               ? "font-medium text-foreground"
@@ -462,21 +462,21 @@ export function AppShell({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-white/10 bg-slate-950/70 px-5 py-3 backdrop-blur">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
+      <header className="shrink-0 border-b border-white/10 bg-slate-950/70 px-4 py-3 backdrop-blur sm:px-5">
+        <div className="flex flex-wrap items-start justify-between gap-3 sm:items-center">
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2.5">
               <img
                 src={httpClientLogo}
                 alt="HttpClient"
-                className="h-9 w-auto max-w-[172px] shrink-0 sm:h-10 sm:max-w-[196px]"
+                className="h-9 w-auto max-w-[160px] shrink-0 sm:h-10 sm:max-w-[196px]"
               />
               <Badge className="border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-muted">
                 {user.role}
               </Badge>
             </div>
             <nav
-              className="mt-2 flex min-w-0 flex-wrap items-center gap-2"
+              className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2"
               aria-label="Current request context"
             >
               <ContextCrumb
@@ -485,14 +485,14 @@ export function AppShell({
                 value={activeWorkspaceName}
                 emptyLabel="Select workspace"
               />
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted/60" />
+              <ChevronRight className="h-3 w-3 shrink-0 text-muted/60" />
               <ContextCrumb
                 icon={<Workflow className="h-3.5 w-3.5" />}
                 label="Project"
                 value={activeProjectName}
                 emptyLabel="Select project"
               />
-              <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted/60" />
+              <ChevronRight className="h-3 w-3 shrink-0 text-muted/60" />
               <ContextCrumb
                 icon={<Send className="h-3.5 w-3.5" />}
                 label="Request"
@@ -502,20 +502,22 @@ export function AppShell({
               />
             </nav>
           </div>
-          <div className="flex shrink-0 items-center gap-3 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2">
-            <div className="min-w-0 text-right text-xs text-muted">
+          <div className="flex min-w-0 shrink-0 items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-2 max-[640px]:w-full max-[640px]:justify-between">
+            <div className="min-w-0 text-right text-xs text-muted max-[480px]:hidden">
               <div className="truncate font-medium text-foreground">
                 {user.username}
               </div>
               <div>Secure cookie session</div>
             </div>
             <Button
-              className="h-9 rounded-full px-3"
+              className="h-9 rounded-full px-3 max-[480px]:w-9 max-[480px]:p-0"
               variant="secondary"
               onClick={onLogout}
+              title="Logout"
+              aria-label="Logout"
             >
               <LogOut className="h-4 w-4" />
-              Logout
+              <span className="max-[480px]:hidden">Logout</span>
             </Button>
           </div>
         </div>
@@ -523,7 +525,7 @@ export function AppShell({
       <main
         ref={mainRef}
         style={mainStyle}
-        className="grid min-h-0 flex-1 grid-cols-[var(--sidebar-width)_minmax(0,1fr)_var(--inspector-width)] gap-5 overflow-hidden p-5 max-[1280px]:grid-cols-1 max-[1280px]:overflow-y-auto"
+        className="grid min-h-0 flex-1 grid-cols-[var(--sidebar-width)_minmax(0,1fr)_var(--inspector-width)] gap-4 overflow-hidden p-3 sm:gap-5 sm:p-5 max-[1280px]:grid-cols-1 max-[1280px]:overflow-y-auto"
       >
         <aside className="relative min-h-0 overflow-hidden">
           {sidebar}
@@ -653,4 +655,5 @@ export function AppShell({
     </div>
   );
 }
+
 

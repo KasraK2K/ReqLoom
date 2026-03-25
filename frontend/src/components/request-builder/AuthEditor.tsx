@@ -32,31 +32,46 @@ export function AuthEditor({ value, onChange }: AuthEditorProps) {
         }
       />
       {value.type === "bearer" ? (
-        <Input
-          value={value.token ?? ""}
-          onChange={(event) =>
-            onChange({ ...value, token: event.target.value })
-          }
-          placeholder="Bearer token"
-        />
+        <div className="space-y-1.5">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+            Bearer Token
+          </div>
+          <Input
+            value={value.token ?? ""}
+            onChange={(event) =>
+              onChange({ ...value, token: event.target.value })
+            }
+            placeholder="Bearer token"
+          />
+        </div>
       ) : null}
       {value.type === "basic" ? (
         <div className="grid gap-3 md:grid-cols-2">
-          <Input
-            value={value.username ?? ""}
-            onChange={(event) =>
-              onChange({ ...value, username: event.target.value })
-            }
-            placeholder="Username"
-          />
-          <Input
-            type="password"
-            value={value.password ?? ""}
-            onChange={(event) =>
-              onChange({ ...value, password: event.target.value })
-            }
-            placeholder="Password"
-          />
+          <div className="space-y-1.5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+              Username
+            </div>
+            <Input
+              value={value.username ?? ""}
+              onChange={(event) =>
+                onChange({ ...value, username: event.target.value })
+              }
+              placeholder="Username"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+              Password
+            </div>
+            <Input
+              type="password"
+              value={value.password ?? ""}
+              onChange={(event) =>
+                onChange({ ...value, password: event.target.value })
+              }
+              placeholder="Password"
+            />
+          </div>
         </div>
       ) : null}
     </div>

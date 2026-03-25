@@ -22,10 +22,10 @@ export function MethodSelector({ value, onChange }: MethodSelectorProps) {
       options={METHOD_DROPDOWN_OPTIONS}
       onChange={onChange}
       ariaLabel="Select request method"
-      rootClassName="shrink-0"
+      rootClassName="w-full shrink-0 min-[860px]:w-auto"
       useDefaultTriggerStyle={false}
       triggerClassName={cn(
-        "flex h-11 w-[108px] items-center justify-between rounded-xl border px-3 text-sm font-semibold outline-none transition",
+        "flex h-11 w-full min-[860px]:w-[108px] items-center justify-between rounded-xl border px-3 text-sm font-semibold outline-none transition",
         METHOD_STYLES[value],
       )}
       menuWidth={132}

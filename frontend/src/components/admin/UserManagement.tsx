@@ -42,10 +42,12 @@ function RoleSelector({
   value,
   onChange,
   compact = false,
+  disabled = false,
 }: {
   value: UserRole;
   onChange: (role: UserRole) => void;
   compact?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <DropdownSelect
@@ -56,6 +58,7 @@ function RoleSelector({
       triggerClassName={cn(
         "bg-slate-950/70",
         compact && "h-9 rounded-lg px-2.5 text-xs",
+        disabled && "pointer-events-none opacity-60",
       )}
       menuWidth={compact ? 132 : 152}
       getItemClassName={(_option, isSelected) =>
@@ -84,10 +87,12 @@ function WorkspaceAccessPicker({
   workspaces,
   selectedIds,
   onToggle,
+  disabled = false,
 }: {
   workspaces: WorkspaceMeta[];
   selectedIds: string[];
   onToggle: (workspaceId: string) => void;
+  disabled?: boolean;
 }) {
   if (workspaces.length === 0) {
     return (
@@ -98,14 +103,15 @@ function WorkspaceAccessPicker({
   }
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
       {workspaces.map((workspace) => {
         const checked = selectedIds.includes(workspace._id);
         return (
           <label
             key={workspace._id}
             className={cn(
-              "flex min-w-0 cursor-pointer items-center gap-2 rounded-lg border px-2.5 py-2 text-xs transition",
+              "flex w-full min-w-0 cursor-pointer items-center justify-between gap-3 rounded-lg border px-3 py-2 text-xs transition",
+              disabled && "pointer-events-none opacity-60",
               checked
                 ? "border-sky-400/25 bg-sky-500/10 text-sky-100"
                 : "border-white/10 bg-slate-950/40 text-muted hover:border-white/18 hover:bg-white/[0.04]",
@@ -116,14 +122,15 @@ function WorkspaceAccessPicker({
               onChange={() => onToggle(workspace._id)}
               type="checkbox"
               className="sr-only"
+              disabled={disabled}
             />
+            <span className="truncate">{workspace.name}</span>
             <span
               className={cn(
-                "h-1.5 w-1.5 shrink-0 rounded-full",
+                "h-2 w-2 shrink-0 rounded-full",
                 checked ? "bg-sky-300" : "bg-white/20",
               )}
             />
-            <span className="truncate">{workspace.name}</span>
           </label>
         );
       })}
@@ -145,6 +152,7 @@ export function UserManagement({
   const [workspaceIds, setWorkspaceIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [pendingUserIds, setPendingUserIds] = useState<string[]>([]);
 
   const sortedUsers = useMemo(
     () => [...users].sort((a, b) => a.username.localeCompare(b.username)),
@@ -157,6 +165,15 @@ export function UserManagement({
         ? current.filter((id) => id !== workspaceId)
         : [...current, workspaceId],
     );
+  };
+
+  const setUserPending = (userId: string, pending: boolean) => {
+    setPendingUserIds((current) => {
+      if (pending) {
+        return current.includes(userId) ? current : [...current, userId];
+      }
+      return current.filter((id) => id !== userId);
+    });
   };
 
   const handleCreate = async () => {
@@ -198,6 +215,27 @@ export function UserManagement({
     }
   };
 
+  const handleUpdate = async (
+    userId: string,
+    payload: { role?: UserRole; workspaceIds?: string[] },
+  ) => {
+    setUserPending(userId, true);
+    try {
+      await onUpdate(userId, payload);
+    } finally {
+      setUserPending(userId, false);
+    }
+  };
+
+  const handleDelete = async (userId: string) => {
+    setUserPending(userId, true);
+    try {
+      await onDelete(userId);
+    } finally {
+      setUserPending(userId, false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <Card className="border-white/8 bg-white/[0.035] shadow-none">
@@ -215,24 +253,44 @@ export function UserManagement({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3">
-            <Input
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              placeholder="Username"
-            />
-            <RoleSelector value={role} onChange={setRole} />
-            <Input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Password"
-            />
-            <Input
-              type="password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              placeholder="Confirm password"
-            />
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                Username
+              </div>
+              <Input
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="Username"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                Role
+              </div>
+              <RoleSelector value={role} onChange={setRole} />
+            </div>
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                Password
+              </div>
+              <Input
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Password"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                Confirm Password
+              </div>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="Confirm password"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -248,6 +306,7 @@ export function UserManagement({
               workspaces={workspaces}
               selectedIds={workspaceIds}
               onToggle={toggleWorkspace}
+              disabled={isCreating}
             />
           </div>
 
@@ -291,79 +350,87 @@ export function UserManagement({
             </div>
           ) : null}
 
-          {sortedUsers.map((user) => (
-            <div
-              key={user._id}
-              className="rounded-2xl border border-white/8 bg-slate-950/35 p-3"
-            >
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-sm font-semibold text-foreground">
-                  {user.username.slice(0, 1).toUpperCase()}
-                </div>
+          {sortedUsers.map((user) => {
+            const isPending = pendingUserIds.includes(user._id);
 
-                <div className="min-w-0 flex-1 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="truncate font-medium text-foreground">
-                        {user.username}
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
-                        <RoleBadge role={user.role} />
-                        <span>{user.workspaceIds.length} workspaces</span>
-                      </div>
-                    </div>
-                    <Button
-                      variant="destructive"
-                      className="h-9 w-9 shrink-0 rounded-lg p-0"
-                      onClick={() => onDelete(user._id)}
-                      aria-label={`Delete ${user.username}`}
-                      title={`Delete ${user.username}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+            return (
+              <div
+                key={user._id}
+                className="rounded-2xl border border-white/8 bg-slate-950/35 p-3.5"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-sm font-semibold text-foreground">
+                    {user.username.slice(0, 1).toUpperCase()}
                   </div>
 
-                  <div className="space-y-2">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-                      Role
+                  <div className="min-w-0 flex-1 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate font-medium text-foreground">
+                          {user.username}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
+                          <RoleBadge role={user.role} />
+                          <span>{user.workspaceIds.length} workspaces</span>
+                          {isPending ? <span>Updating...</span> : null}
+                        </div>
+                      </div>
+                      <Button
+                        variant="destructive"
+                        className="h-9 w-9 shrink-0 rounded-lg p-0"
+                        onClick={() => void handleDelete(user._id)}
+                        disabled={isPending}
+                        aria-label={`Delete ${user.username}`}
+                        title={`Delete ${user.username}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <RoleSelector
-                      compact
-                      value={user.role}
-                      onChange={(nextRole) => {
-                        if (nextRole === user.role) {
-                          return;
-                        }
-                        void onUpdate(user._id, { role: nextRole });
-                      }}
-                    />
-                  </div>
 
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="space-y-2">
                       <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-                        Workspace Access
+                        Role
                       </div>
-                      <div className="text-xs text-muted">
-                        {user.workspaceIds.length} selected
-                      </div>
+                      <RoleSelector
+                        compact
+                        value={user.role}
+                        disabled={isPending}
+                        onChange={(nextRole) => {
+                          if (nextRole === user.role || isPending) {
+                            return;
+                          }
+                          void handleUpdate(user._id, { role: nextRole });
+                        }}
+                      />
                     </div>
-                    <WorkspaceAccessPicker
-                      workspaces={workspaces}
-                      selectedIds={user.workspaceIds}
-                      onToggle={(workspaceId) =>
-                        void onUpdate(user._id, {
-                          workspaceIds: user.workspaceIds.includes(workspaceId)
-                            ? user.workspaceIds.filter((id) => id !== workspaceId)
-                            : [...user.workspaceIds, workspaceId],
-                        })
-                      }
-                    />
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+                          Workspace Access
+                        </div>
+                        <div className="text-xs text-muted">
+                          {user.workspaceIds.length} selected
+                        </div>
+                      </div>
+                      <WorkspaceAccessPicker
+                        workspaces={workspaces}
+                        selectedIds={user.workspaceIds}
+                        disabled={isPending}
+                        onToggle={(workspaceId) =>
+                          void handleUpdate(user._id, {
+                            workspaceIds: user.workspaceIds.includes(workspaceId)
+                              ? user.workspaceIds.filter((id) => id !== workspaceId)
+                              : [...user.workspaceIds, workspaceId],
+                          })
+                        }
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </CardContent>
       </Card>
     </div>
