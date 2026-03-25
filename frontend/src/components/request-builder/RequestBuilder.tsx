@@ -63,8 +63,8 @@ export function RequestBuilder({ draft, envVars, activeTab, isSending, onDraftCh
 
   if (!draft) {
     return (
-      <Card className="h-full">
-        <CardContent className="flex h-full items-center justify-center text-sm text-muted">Select or create a request to start building.</CardContent>
+      <Card className="flex h-full min-h-0 flex-col">
+        <CardContent className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted">Select or create a request to start building.</CardContent>
       </Card>
     );
   }
@@ -72,7 +72,7 @@ export function RequestBuilder({ draft, envVars, activeTab, isSending, onDraftCh
   const updateDraft = (patch: Partial<RequestDoc>) => onDraftChange({ ...draft, ...patch, updatedAt: new Date().toISOString() });
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden">
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div>
@@ -85,7 +85,7 @@ export function RequestBuilder({ draft, envVars, activeTab, isSending, onDraftCh
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="min-h-0 flex-1 space-y-4 overflow-auto">
         <div className="flex items-center gap-3">
           <MethodSelector value={draft.method} onChange={(method) => updateDraft({ method })} />
           <div className="min-w-0 flex-1">
@@ -128,3 +128,4 @@ export function RequestBuilder({ draft, envVars, activeTab, isSending, onDraftCh
     </Card>
   );
 }
+

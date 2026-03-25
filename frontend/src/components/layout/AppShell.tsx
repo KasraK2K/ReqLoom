@@ -242,8 +242,8 @@ export function AppShell({
   };
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="border-b border-white/10 bg-slate-950/70 px-5 py-3 backdrop-blur">
+    <div className="flex h-screen overflow-hidden flex-col">
+      <header className="shrink-0 border-b border-white/10 bg-slate-950/70 px-5 py-3 backdrop-blur">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -302,9 +302,9 @@ export function AppShell({
       <main
         ref={mainRef}
         style={mainStyle}
-        className="grid min-h-0 flex-1 grid-cols-[var(--sidebar-width)_minmax(0,1fr)_var(--inspector-width)] gap-5 p-5 max-[1280px]:grid-cols-1"
+        className="grid min-h-0 flex-1 overflow-hidden grid-cols-[var(--sidebar-width)_minmax(0,1fr)_var(--inspector-width)] gap-5 p-5 max-[1280px]:overflow-y-auto max-[1280px]:grid-cols-1"
       >
-        <aside className="relative min-h-0">
+        <aside className="relative min-h-0 overflow-hidden">
           {sidebar}
           <button
             className="group absolute -right-4 top-0 flex h-full w-8 cursor-col-resize items-center justify-center max-[1280px]:hidden"
@@ -326,13 +326,13 @@ export function AppShell({
             />
           </button>
         </aside>
-        <section className="grid min-h-0 grid-rows-[minmax(0,1fr)_minmax(260px,40%)] gap-4">
+        <section className="grid min-h-0 overflow-hidden grid-rows-[minmax(0,1fr)_minmax(260px,40%)] gap-4">
           {builder}
           {response}
         </section>
         <aside
           className={cn(
-            "min-h-0",
+            "min-h-0 overflow-hidden",
             isInspectorCollapsed && "max-[1280px]:w-[52px] max-[1280px]:justify-self-end",
           )}
         >
@@ -386,3 +386,5 @@ export function AppShell({
     </div>
   );
 }
+
+

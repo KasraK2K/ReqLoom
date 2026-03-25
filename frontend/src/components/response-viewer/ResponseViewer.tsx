@@ -31,7 +31,7 @@ export function ResponseViewer({ response }: ResponseViewerProps) {
   };
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden">
       <CardHeader>
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -49,7 +49,7 @@ export function ResponseViewer({ response }: ResponseViewerProps) {
           </Button>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-h-0 flex-1 overflow-auto">
         {!response ? (
           <div className="flex h-[320px] items-center justify-center text-sm text-muted">Send a request to inspect status, headers, cookies, and the response body.</div>
         ) : (
@@ -82,3 +82,4 @@ export function ResponseViewer({ response }: ResponseViewerProps) {
     </Card>
   );
 }
+
