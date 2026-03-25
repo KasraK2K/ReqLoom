@@ -19,15 +19,9 @@ export function EnvVarEditor({ projectName, envVars, onChange, onSave }: EnvVarE
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <CardTitle>Environment</CardTitle>
-            <p className="mt-1 text-xs text-muted">{projectName ? `${projectName} variables` : "Select a project to edit environment variables."}</p>
-          </div>
-          <Button variant="secondary" onClick={onSave} disabled={!projectName}>
-            <Save className="h-4 w-4" />
-            Save
-          </Button>
+        <div>
+          <CardTitle>Environment</CardTitle>
+          <p className="mt-1 text-xs text-muted">{projectName ? `${projectName} variables` : "Select a project to edit environment variables."}</p>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -40,11 +34,24 @@ export function EnvVarEditor({ projectName, envVars, onChange, onSave }: EnvVarE
             </Button>
           </div>
         ))}
-        <Button variant="secondary" onClick={() => onChange([...envVars, { key: "", value: "" }])}>
-          <Plus className="h-4 w-4" />
-          Add Variable
-        </Button>
+        <div className="flex items-center justify-between gap-3">
+          <Button variant="secondary" onClick={() => onChange([...envVars, { key: "", value: "" }])}>
+            <Plus className="h-4 w-4" />
+            Add Variable
+          </Button>
+          <Button
+            variant="secondary"
+            className="h-9 w-9 shrink-0 rounded-lg p-0"
+            onClick={onSave}
+            disabled={!projectName}
+            aria-label="Save environment variables"
+            title="Save environment variables"
+          >
+            <Save className="h-4 w-4" />
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
 }
+
