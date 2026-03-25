@@ -62,6 +62,14 @@ type CreateDialogState =
       projectId: string;
       projectName?: string;
     }
+  | {
+      kind: "request";
+      workspaceId: string;
+      projectId: string;
+      folderId?: string | null;
+      projectName?: string;
+      folderName?: string;
+    }
   | null;
 
 type RenameDialogState =
@@ -346,6 +354,40 @@ export default function App() {
     });
   };
 
+  const openCreateRequestDialog = (
+    projectId: string,
+    folderId?: string | null,
+  ) => {
+    if (!activeWorkspace || !activeTree) {
+      reportError(new Error("Open a workspace before creating a request."));
+      return;
+    }
+
+    const project = activeTree.projects.find((item) => item._id === projectId);
+    if (!project) {
+      reportError(new Error("Project not found."));
+      return;
+    }
+
+    const folder = folderId
+      ? project.folders.find((item) => item._id === folderId)
+      : undefined;
+    if (folderId && !folder) {
+      reportError(new Error("Folder not found."));
+      return;
+    }
+
+    setRenameDialog(null);
+    setCreateDialog({
+      kind: "request",
+      workspaceId: activeWorkspace._id,
+      projectId,
+      folderId: folderId ?? null,
+      projectName: project.name,
+      folderName: folder?.name,
+    });
+  };
+
   const openRenameWorkspaceDialog = (workspaceId: string) => {
     const workspace = workspaces.find((item) => item._id === workspaceId);
     if (!workspace) {
@@ -451,14 +493,24 @@ export default function App() {
       return;
     }
 
-    await api.createFolder(
+    if (createDialog.kind === "folder") {
+      await api.createFolder(
+        createDialog.workspaceId,
+        createDialog.projectId,
+        name,
+      );
+      selectWorkspace(createDialog.workspaceId);
+      selectProject(createDialog.projectId);
+      await loadWorkspaceTree(createDialog.workspaceId);
+      return;
+    }
+
+    await createRequest(
       createDialog.workspaceId,
       createDialog.projectId,
       name,
+      createDialog.folderId,
     );
-    selectWorkspace(createDialog.workspaceId);
-    selectProject(createDialog.projectId);
-    await loadWorkspaceTree(createDialog.workspaceId);
   };
 
   const handleRenameEntity = async (name: string) => {
@@ -523,20 +575,28 @@ export default function App() {
     await refreshTree(renameDialog.workspaceId);
   };
 
-  const createRequest = async (projectId: string, folderId?: string | null) => {
-    if (!activeWorkspace || !activeTree) {
+  const createRequest = async (
+    workspaceId: string,
+    projectId: string,
+    name: string,
+    folderId?: string | null,
+  ) => {
+    const workspaceTree = trees[workspaceId];
+    if (!workspaceTree) {
       return;
     }
-    const project = activeTree.projects.find((item) => item._id === projectId);
+
+    const project = workspaceTree.projects.find((item) => item._id === projectId);
     if (!project) {
       return;
     }
+
     const requestDraft = createEmptyRequest(project, folderId);
     const { request } = await api.createRequest({
       workspaceId: requestDraft.workspaceId,
       projectId: requestDraft.projectId,
       folderId: requestDraft.folderId,
-      name: requestDraft.name,
+      name,
       method: requestDraft.method,
       url: requestDraft.url,
       headers: requestDraft.headers,
@@ -548,7 +608,9 @@ export default function App() {
         ...project.folders.flatMap((folder) => folder.requests),
       ].length,
     });
-    await refreshTree(activeWorkspace._id);
+
+    selectWorkspace(workspaceId);
+    await refreshTree(workspaceId);
     selectProject(projectId);
     selectRequest(request._id);
   };
@@ -636,14 +698,28 @@ export default function App() {
       };
     }
 
+    if (createDialog.kind === "folder") {
+      return {
+        title: "Create Folder",
+        description: createDialog.projectName
+          ? `Group requests inside ${createDialog.projectName}.`
+          : "Create a folder inside the selected project.",
+        label: "Folder",
+        placeholder: "Folder name",
+        submitLabel: "Create Folder",
+      };
+    }
+
     return {
-      title: "Create Folder",
-      description: createDialog.projectName
-        ? `Group requests inside ${createDialog.projectName}.`
-        : "Create a folder inside the selected project.",
-      label: "Folder",
-      placeholder: "Folder name",
-      submitLabel: "Create Folder",
+      title: "Create Request",
+      description: createDialog.folderName
+        ? `Create a request inside ${createDialog.folderName}.`
+        : createDialog.projectName
+          ? `Create a request inside ${createDialog.projectName}.`
+          : "Create a request inside the selected project.",
+      label: "Request",
+      placeholder: "Request name",
+      submitLabel: "Create Request",
     };
   }, [createDialog]);
 
@@ -730,9 +806,7 @@ export default function App() {
             onCreateWorkspace={openCreateWorkspaceDialog}
             onCreateProject={openCreateProjectDialog}
             onCreateFolder={openCreateFolderDialog}
-            onCreateRequest={(projectId, folderId) =>
-              createRequest(projectId, folderId).catch(reportError)
-            }
+            onCreateRequest={openCreateRequestDialog}
             onRenameWorkspace={openRenameWorkspaceDialog}
             onRenameProject={openRenameProjectDialog}
             onRenameFolder={openRenameFolderDialog}
