@@ -55,19 +55,23 @@ export function ResponseViewer({ response }: ResponseViewerProps) {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="min-h-0 flex-1 overflow-auto">
+      <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {!response ? (
-          <div className="flex h-[320px] items-center justify-center text-sm text-muted">
+          <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-center text-sm text-muted">
             Send a request to inspect status, headers, cookies, and the response body.
           </div>
         ) : (
-          <Tabs value={tab} onValueChange={setTab}>
-            <TabsList>
+          <Tabs
+            value={tab}
+            onValueChange={setTab}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <TabsList className="shrink-0 self-start">
               <TabsTrigger value="body">Body</TabsTrigger>
               <TabsTrigger value="headers">Headers</TabsTrigger>
               <TabsTrigger value="cookies">Cookies</TabsTrigger>
             </TabsList>
-            <TabsContent value="body" className="pt-4">
+            <TabsContent value="body" className="min-h-0 flex-1 overflow-auto pt-4">
               {response.contentKind === "json" ? (
                 <JSONTree value={response.textBody ?? ""} />
               ) : null}
@@ -92,12 +96,12 @@ export function ResponseViewer({ response }: ResponseViewerProps) {
                 </pre>
               ) : null}
             </TabsContent>
-            <TabsContent value="headers" className="pt-4">
+            <TabsContent value="headers" className="min-h-0 flex-1 overflow-auto pt-4">
               <pre className="max-h-[360px] overflow-auto rounded-xl bg-slate-950/70 p-4 font-mono text-sm text-slate-200">
                 {JSON.stringify(response.headers, null, 2)}
               </pre>
             </TabsContent>
-            <TabsContent value="cookies" className="pt-4">
+            <TabsContent value="cookies" className="min-h-0 flex-1 overflow-auto pt-4">
               <pre className="max-h-[360px] overflow-auto rounded-xl bg-slate-950/70 p-4 font-mono text-sm text-slate-200">
                 {JSON.stringify(response.cookies, null, 2)}
               </pre>
