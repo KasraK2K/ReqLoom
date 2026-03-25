@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { HistoryDoc } from "@restify/shared";
-import { Copy } from "lucide-react";
+import { TerminalSquare } from "lucide-react";
 import { METHOD_STYLES } from "../../lib/methods";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -303,7 +303,7 @@ export function HistoryDetailsDialog({
                       aria-label="Copy request body"
                       title="Copy request body"
                     >
-                      <Copy className="h-4 w-4" />
+                      <TerminalSquare className="h-4 w-4" />
                     </Button>
                   ) : null
                 }
@@ -346,3 +346,4 @@ export function HistoryDetailsDialog({
     </Dialog>
   );
 }
+

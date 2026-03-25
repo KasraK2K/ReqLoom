@@ -1,7 +1,8 @@
 import type { ExecuteRequestPayload, ProjectEnvVar, RequestDoc } from "@restify/shared";
-import { Save } from "lucide-react";
+import { Save, TerminalSquare } from "lucide-react";
 import { useMemo } from "react";
 import { useCtrlEnter } from "../../hooks/use-ctrl-enter";
+import { buildCurlCommand } from "../../lib/curl";
 import { createHeaderRow, createQueryParamRow } from "../../lib/request-helpers";
 import {
   buildExecuteRequestPayload,
@@ -76,6 +77,18 @@ export function RequestBuilder({
       updatedAt: new Date().toISOString(),
     });
 
+  const copyCurl = async () => {
+    if (!sendPayload) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(buildCurlCommand(sendPayload));
+    } catch {
+      return;
+    }
+  };
+
   return (
     <Card className="flex h-full min-h-0 flex-col overflow-hidden">
       <CardHeader>
@@ -86,15 +99,27 @@ export function RequestBuilder({
               Ctrl+Enter sends the active request from any request input.
             </p>
           </div>
-          <Button
-            variant="secondary"
-            className="h-9 w-9 shrink-0 rounded-lg p-0"
-            onClick={onSave}
-            aria-label="Save request"
-            title="Save request"
-          >
-            <Save className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="secondary"
+              className="h-9 w-9 rounded-lg p-0"
+              onClick={() => void copyCurl()}
+              disabled={!sendPayload}
+              aria-label="Copy cURL command"
+              title="Copy cURL command"
+            >
+              <TerminalSquare className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="secondary"
+              className="h-9 w-9 rounded-lg p-0"
+              onClick={onSave}
+              aria-label="Save request"
+              title="Save request"
+            >
+              <Save className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
