@@ -112,13 +112,14 @@ function ContextCrumb({
 
   return (
     <div
-      className="flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-white/8 bg-white/[0.03] px-2 py-1"
+      className="flex min-w-0 max-w-full items-center gap-1.5"
       title={`${label}: ${displayValue}`}
+      aria-current={isCurrent ? "page" : undefined}
     >
       <span
         className={cn(
-          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-slate-950/70 text-accent",
-          isCurrent && "border-accent/25 bg-accent/10",
+          "shrink-0 text-muted/75",
+          isCurrent && "text-accent",
         )}
       >
         {icon}
@@ -526,7 +527,7 @@ export function AppShell({
               <RoleChip role={user.role} />
             </div>
             <nav
-              className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2"
+              className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-2.5"
               aria-label="Current request context"
             >
               <ContextCrumb
@@ -535,14 +536,14 @@ export function AppShell({
                 value={activeWorkspaceName}
                 emptyLabel="Select workspace"
               />
-              <ChevronRight className="h-3 w-3 shrink-0 text-muted/60" />
+              <span className="h-4 w-px shrink-0 bg-white/10" aria-hidden="true" />
               <ContextCrumb
                 icon={<Workflow className="h-3.5 w-3.5" />}
                 label="Project"
                 value={activeProjectName}
                 emptyLabel="Select project"
               />
-              <ChevronRight className="h-3 w-3 shrink-0 text-muted/60" />
+              <span className="h-4 w-px shrink-0 bg-white/10" aria-hidden="true" />
               <ContextCrumb
                 icon={<Send className="h-3.5 w-3.5" />}
                 label="Request"
@@ -705,6 +706,8 @@ export function AppShell({
     </div>
   );
 }
+
+
 
 
 
