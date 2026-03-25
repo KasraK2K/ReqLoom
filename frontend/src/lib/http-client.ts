@@ -102,7 +102,11 @@ export const api = {
     }),
   moveProject: (
     projectId: string,
-    payload: { sourceWorkspaceId: string; targetWorkspaceId: string },
+    payload: {
+      sourceWorkspaceId: string;
+      targetWorkspaceId: string;
+      targetOrder?: number;
+    },
   ) =>
     requestJson<{ project: ProjectDoc }>(`/projects/${projectId}/move`, {
       method: "POST",
@@ -146,6 +150,18 @@ export const api = {
     requestJson<{ success: boolean }>("/folders/reorder", {
       method: "POST",
       body: JSON.stringify({ workspaceId, projectId, orderedIds }),
+    }),
+  moveFolder: (
+    folderId: string,
+    payload: {
+      workspaceId: string;
+      targetProjectId: string;
+      targetOrder?: number;
+    },
+  ) =>
+    requestJson<{ folder: FolderDoc }>(`/folders/${folderId}/move`, {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
   deleteFolder: (folderId: string, workspaceId: string) =>
     requestJson<{ success: boolean }>(

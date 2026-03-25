@@ -645,14 +645,17 @@ export default function App() {
     projectId,
     sourceWorkspaceId,
     targetWorkspaceId,
+    targetOrder,
   }: {
     projectId: string;
     sourceWorkspaceId: string;
     targetWorkspaceId: string;
+    targetOrder?: number;
   }) => {
     const { project } = await api.moveProject(projectId, {
       sourceWorkspaceId,
       targetWorkspaceId,
+      targetOrder,
     });
 
     await loadWorkspaces();
@@ -668,6 +671,41 @@ export default function App() {
       movedProject?.requests[0]?._id ??
         movedProject?.folders[0]?.requests[0]?._id,
     );
+  };
+
+  const handleMoveFolder = async ({
+    folderId,
+    workspaceId,
+    targetProjectId,
+    targetOrder,
+  }: {
+    folderId: string;
+    workspaceId: string;
+    targetProjectId: string;
+    targetOrder: number;
+  }) => {
+    const preservedRequestId = activeRequestId;
+    const { folder } = await api.moveFolder(folderId, {
+      workspaceId,
+      targetProjectId,
+      targetOrder,
+    });
+
+    selectWorkspace(workspaceId);
+    await refreshTree(workspaceId);
+
+    const targetProject = useWorkspaceStore
+      .getState()
+      .trees[workspaceId]?.projects.find((item) => item._id === targetProjectId);
+    const movedFolder = targetProject?.folders.find((item) => item._id === folder._id);
+    const nextRequestId =
+      movedFolder?.requests.find((item) => item._id === preservedRequestId)?._id ??
+      movedFolder?.requests[0]?._id ??
+      targetProject?.requests[0]?._id ??
+      targetProject?.folders[0]?.requests[0]?._id;
+
+    selectProject(targetProjectId);
+    selectRequest(nextRequestId);
   };
 
   const saveRequest = async () => {
@@ -849,6 +887,7 @@ export default function App() {
         sidebar={
           <WorkspaceTree
             workspaces={workspaces}
+            workspaceTrees={trees}
             tree={activeTree}
             activeWorkspaceId={activeWorkspaceId}
             activeProjectId={activeProjectId}
@@ -939,9 +978,21 @@ export default function App() {
             onMoveProject={(payload) =>
               handleMoveProject(payload).catch(reportError)
             }
+            onMoveFolder={(payload) =>
+              handleMoveFolder(payload).catch(reportError)
+            }
             onMoveRequest={(payload) =>
               handleMoveRequest(payload).catch(reportError)
             }
+            onEnsureWorkspaceTree={(workspaceId) => {
+              if (useWorkspaceStore.getState().trees[workspaceId]) {
+                return Promise.resolve();
+              }
+
+              return api.getWorkspaceTree(workspaceId).then(({ tree }) => {
+                useWorkspaceStore.getState().setTree(workspaceId, tree);
+              });
+            }}
           />
         }
         builder={

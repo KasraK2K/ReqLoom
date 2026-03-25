@@ -32,7 +32,7 @@ import {
   Plus,
   Workflow,
 } from "lucide-react";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { cn } from "../../lib/cn";
 import { METHOD_TEXT_STYLES } from "../../lib/methods";
 import { Button } from "../ui/button";
@@ -76,6 +76,14 @@ interface ProjectMovePayload {
   projectId: string;
   sourceWorkspaceId: string;
   targetWorkspaceId: string;
+  targetOrder?: number;
+}
+
+interface FolderMovePayload {
+  folderId: string;
+  workspaceId: string;
+  targetProjectId: string;
+  targetOrder: number;
 }
 
 interface DropTargetState {
@@ -85,6 +93,7 @@ interface DropTargetState {
 
 interface WorkspaceTreeProps {
   workspaces: WorkspaceMeta[];
+  workspaceTrees: Record<string, WorkspaceTreeModel>;
   tree?: WorkspaceTreeModel;
   activeWorkspaceId?: string;
   activeProjectId?: string;
@@ -112,7 +121,9 @@ interface WorkspaceTreeProps {
   onProjectReorder: (orderedIds: string[]) => void;
   onFolderReorder: (projectId: string, orderedIds: string[]) => void;
   onMoveProject: (payload: ProjectMovePayload) => void;
+  onMoveFolder: (payload: FolderMovePayload) => void;
   onMoveRequest: (payload: RequestMovePayload) => void;
+  onEnsureWorkspaceTree?: (workspaceId: string) => Promise<void>;
 }
 
 function sortByOrder<T extends { order: number }>(items: T[]): T[] {
@@ -253,9 +264,45 @@ function TreeNodeContent({
 }
 
 
-function RequestDropPlaceholder({ request }: { request: RequestDoc }) {
+function DropPlaceholderShell({ children }: { children: ReactNode }) {
   return (
     <div className="ml-5 rounded-md border border-dashed border-accent/45 bg-accent/8 px-2 py-1">
+      {children}
+    </div>
+  );
+}
+
+function ProjectDropPlaceholder({ project }: { project: TreeProject }) {
+  const requestCount =
+    project.requests.length +
+    project.folders.reduce((total, folder) => total + folder.requests.length, 0);
+
+  return (
+    <DropPlaceholderShell>
+      <TreeNodeContent
+        icon={<Workflow className="h-3.5 w-3.5 text-sky-300" />}
+        name={project.name}
+        meta={`${project.folders.length} fld | ${requestCount} req`}
+      />
+    </DropPlaceholderShell>
+  );
+}
+
+function FolderDropPlaceholder({ folder }: { folder: TreeFolder }) {
+  return (
+    <DropPlaceholderShell>
+      <TreeNodeContent
+        icon={<Folder className="h-3.5 w-3.5 text-amber-300" />}
+        name={folder.name}
+        meta={formatCount(folder.requests.length, "request")}
+      />
+    </DropPlaceholderShell>
+  );
+}
+
+function RequestDropPlaceholder({ request }: { request: RequestDoc }) {
+  return (
+    <DropPlaceholderShell>
       <div className="flex items-center gap-1.5">
         <span
           className={cn(
@@ -267,7 +314,7 @@ function RequestDropPlaceholder({ request }: { request: RequestDoc }) {
         </span>
         <span className="truncate text-[12px] text-accent/90">{request.name}</span>
       </div>
-    </div>
+    </DropPlaceholderShell>
   );
 }
 
@@ -348,6 +395,7 @@ function reorderIds(items: SortableItem[], activeId: string, overId: string) {
 export function WorkspaceTree(props: WorkspaceTreeProps) {
   const {
     workspaces,
+    workspaceTrees,
     tree,
     activeWorkspaceId,
     activeProjectId,
@@ -375,7 +423,9 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     onProjectReorder,
     onFolderReorder,
     onMoveProject,
+    onMoveFolder,
     onMoveRequest,
+    onEnsureWorkspaceTree,
   } = props;
 
   const sensors = useSensors(
@@ -394,16 +444,60 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     () => [...workspaces].sort((a, b) => a.order - b.order),
     [workspaces],
   );
+  const treeByWorkspace = useMemo(
+    () =>
+      activeWorkspaceId && tree
+        ? { ...workspaceTrees, [activeWorkspaceId]: tree }
+        : workspaceTrees,
+    [activeWorkspaceId, tree, workspaceTrees],
+  );
+  const activeProjects = useMemo(
+    () =>
+      sortByOrder(
+        activeWorkspaceId ? treeByWorkspace[activeWorkspaceId]?.projects ?? [] : [],
+      ),
+    [activeWorkspaceId, treeByWorkspace],
+  );
+  const projectsByWorkspace = useMemo(() => {
+    const map: Record<string, TreeProject[]> = {};
 
-  const activeProjects = useMemo(() => sortByOrder(tree?.projects ?? []), [tree]);
+    workspaces.forEach((workspace) => {
+      map[workspace._id] = sortByOrder(treeByWorkspace[workspace._id]?.projects ?? []);
+    });
 
+    return map;
+  }, [treeByWorkspace, workspaces]);
+  const projectById = useMemo(() => {
+    const map: Record<string, TreeProject> = {};
+
+    Object.values(treeByWorkspace).forEach((workspaceTree) => {
+      workspaceTree.projects.forEach((project) => {
+        map[project._id] = project;
+      });
+    });
+
+    return map;
+  }, [treeByWorkspace]);
   const foldersByProject = useMemo(() => {
     const map: Record<string, TreeFolder[]> = {};
-    activeProjects.forEach((project) => {
+
+    Object.values(projectById).forEach((project) => {
       map[project._id] = sortByOrder(project.folders);
     });
+
     return map;
-  }, [activeProjects]);
+  }, [projectById]);
+  const folderById = useMemo(() => {
+    const map: Record<string, TreeFolder> = {};
+
+    Object.values(projectById).forEach((project) => {
+      project.folders.forEach((folder) => {
+        map[folder._id] = folder;
+      });
+    });
+
+    return map;
+  }, [projectById]);
 
   const requestById = useMemo(() => {
     const map: Record<string, RequestDoc> = {};
@@ -494,12 +588,36 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     }
 
     if (activeData.kind === "project") {
-      if (
-        overData.kind === "project" &&
-        activeData.workspaceId === overData.workspaceId
-      ) {
+      const resolveProjectTarget = () => {
+        if (overData.kind === "project") {
+          return {
+            workspaceId: overData.workspaceId,
+            overProjectId: overData.projectId,
+          };
+        }
+
+        if (overData.kind === "workspace") {
+          return {
+            workspaceId: overData.workspaceId,
+            overProjectId: null,
+          };
+        }
+
+        return null;
+      };
+
+      const target = resolveProjectTarget();
+      if (!target) {
+        return;
+      }
+
+      const sourceProjects = projectsByWorkspace[activeData.workspaceId] ?? [];
+      const sourceProjectIds = sourceProjects.map((item) => item._id);
+      const isSameWorkspace = activeData.workspaceId === target.workspaceId;
+
+      if (isSameWorkspace && overData.kind === "project") {
         const orderedIds = reorderIds(
-          activeProjects,
+          sourceProjects,
           activeData.projectId,
           overData.projectId,
         );
@@ -509,32 +627,120 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
         return;
       }
 
-      if (
-        overData.kind === "workspace" &&
-        activeData.workspaceId !== overData.workspaceId
-      ) {
-        onMoveProject({
-          projectId: activeData.projectId,
-          sourceWorkspaceId: activeData.workspaceId,
-          targetWorkspaceId: overData.workspaceId,
-        });
-      }
-      return;
-    }
-    if (activeData.kind === "folder" && overData.kind === "folder") {
-      if (activeData.projectId !== overData.projectId) {
+      const targetProjects = projectsByWorkspace[target.workspaceId] ?? [];
+      const targetIdsWithoutActive = targetProjects
+        .map((item) => item._id)
+        .filter((projectId) => projectId !== activeData.projectId);
+      const targetOrder =
+        overData.kind === "project" && target.overProjectId
+          ? targetIdsWithoutActive.indexOf(target.overProjectId)
+          : treeByWorkspace[target.workspaceId]
+            ? targetIdsWithoutActive.length
+            : undefined;
+      const normalizedTargetOrder =
+        targetOrder === undefined
+          ? undefined
+          : Math.max(
+              0,
+              targetOrder === -1 ? targetIdsWithoutActive.length : targetOrder,
+            );
+      const currentIndex = sourceProjectIds.indexOf(activeData.projectId);
+
+      if (isSameWorkspace) {
+        if (normalizedTargetOrder === undefined || currentIndex === normalizedTargetOrder) {
+          return;
+        }
+
+        const orderedIds = sourceProjectIds.filter(
+          (projectId) => projectId !== activeData.projectId,
+        );
+        orderedIds.splice(normalizedTargetOrder, 0, activeData.projectId);
+        onProjectReorder(orderedIds);
         return;
       }
 
-      const projectFolders = foldersByProject[activeData.projectId] ?? [];
-      const orderedIds = reorderIds(
-        projectFolders,
-        activeData.folderId,
-        overData.folderId,
-      );
-      if (orderedIds) {
-        onFolderReorder(activeData.projectId, orderedIds);
+      onMoveProject({
+        projectId: activeData.projectId,
+        sourceWorkspaceId: activeData.workspaceId,
+        targetWorkspaceId: target.workspaceId,
+        targetOrder: normalizedTargetOrder,
+      });
+      return;
+    }
+
+    if (activeData.kind === "folder") {
+      const resolveFolderTarget = () => {
+        if (overData.kind === "folder") {
+          return {
+            projectId: overData.projectId,
+            overFolderId: overData.folderId,
+          };
+        }
+
+        if (overData.kind === "project") {
+          return {
+            projectId: overData.projectId,
+            overFolderId: null,
+          };
+        }
+
+        return null;
+      };
+
+      const target = resolveFolderTarget();
+      if (!target) {
+        return;
       }
+
+      const sourceFolders = foldersByProject[activeData.projectId] ?? [];
+      const sourceFolderIds = sourceFolders.map((item) => item._id);
+      const isSameProject = activeData.projectId === target.projectId;
+
+      if (isSameProject && overData.kind === "folder") {
+        const orderedIds = reorderIds(
+          sourceFolders,
+          activeData.folderId,
+          overData.folderId,
+        );
+        if (orderedIds) {
+          onFolderReorder(activeData.projectId, orderedIds);
+        }
+        return;
+      }
+
+      const targetFolders = foldersByProject[target.projectId] ?? [];
+      const targetIdsWithoutActive = targetFolders
+        .map((item) => item._id)
+        .filter((folderId) => folderId !== activeData.folderId);
+      const targetOrder =
+        overData.kind === "folder" && target.overFolderId
+          ? targetIdsWithoutActive.indexOf(target.overFolderId)
+          : targetIdsWithoutActive.length;
+      const normalizedTargetOrder = Math.max(
+        0,
+        targetOrder === -1 ? targetIdsWithoutActive.length : targetOrder,
+      );
+      const currentIndex = sourceFolderIds.indexOf(activeData.folderId);
+
+      if (isSameProject) {
+        if (currentIndex === normalizedTargetOrder) {
+          return;
+        }
+
+        const orderedIds = sourceFolderIds.filter(
+          (folderId) => folderId !== activeData.folderId,
+        );
+        orderedIds.splice(normalizedTargetOrder, 0, activeData.folderId);
+        onFolderReorder(activeData.projectId, orderedIds);
+        return;
+      }
+
+      onMoveFolder({
+        folderId: activeData.folderId,
+        workspaceId: activeData.workspaceId,
+        targetProjectId: target.projectId,
+        targetOrder: normalizedTargetOrder,
+      });
       return;
     }
 
@@ -658,6 +864,118 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     [dropTarget],
   );
 
+  const projectPreviewTarget = useMemo(() => {
+    if (activeDragData?.kind !== "project" || !dropTarget) {
+      return null;
+    }
+
+    if (dropTarget.data.kind === "project") {
+      return {
+        workspaceId: dropTarget.data.workspaceId,
+        overProjectId: dropTarget.data.projectId,
+      };
+    }
+
+    if (dropTarget.data.kind === "workspace") {
+      return {
+        workspaceId: dropTarget.data.workspaceId,
+        overProjectId: null,
+      };
+    }
+
+    return null;
+  }, [activeDragData, dropTarget]);
+
+  const activeDraggedProject = useMemo(
+    () =>
+      activeDragData?.kind === "project"
+        ? projectById[activeDragData.projectId] ?? null
+        : null,
+    [activeDragData, projectById],
+  );
+
+  const getProjectDropPreview = useCallback(
+    (workspaceId: string) => {
+      if (
+        activeDragData?.kind !== "project" ||
+        !activeDraggedProject ||
+        !projectPreviewTarget
+      ) {
+        return null;
+      }
+
+      if (projectPreviewTarget.workspaceId !== workspaceId) {
+        return null;
+      }
+
+      if (activeDragData.workspaceId === workspaceId) {
+        return null;
+      }
+
+      return {
+        project: activeDraggedProject,
+        beforeProjectId: projectPreviewTarget.overProjectId,
+      };
+    },
+    [activeDragData, activeDraggedProject, projectPreviewTarget],
+  );
+
+  const folderPreviewTarget = useMemo(() => {
+    if (activeDragData?.kind !== "folder" || !dropTarget) {
+      return null;
+    }
+
+    if (dropTarget.data.kind === "folder") {
+      return {
+        projectId: dropTarget.data.projectId,
+        overFolderId: dropTarget.data.folderId,
+      };
+    }
+
+    if (dropTarget.data.kind === "project") {
+      return {
+        projectId: dropTarget.data.projectId,
+        overFolderId: null,
+      };
+    }
+
+    return null;
+  }, [activeDragData, dropTarget]);
+
+  const activeDraggedFolder = useMemo(
+    () =>
+      activeDragData?.kind === "folder"
+        ? folderById[activeDragData.folderId] ?? null
+        : null,
+    [activeDragData, folderById],
+  );
+
+  const getFolderDropPreview = useCallback(
+    (projectId: string) => {
+      if (
+        activeDragData?.kind !== "folder" ||
+        !activeDraggedFolder ||
+        !folderPreviewTarget
+      ) {
+        return null;
+      }
+
+      if (folderPreviewTarget.projectId !== projectId) {
+        return null;
+      }
+
+      if (activeDragData.projectId === projectId) {
+        return null;
+      }
+
+      return {
+        folder: activeDraggedFolder,
+        beforeFolderId: folderPreviewTarget.overFolderId,
+      };
+    },
+    [activeDragData, activeDraggedFolder, folderPreviewTarget],
+  );
+
   const requestPreviewTarget = useMemo(() => {
     if (activeDragData?.kind !== "request" || !dropTarget) {
       return null;
@@ -732,6 +1050,18 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     [activeDragData, activeDraggedRequest, requestPreviewTarget],
   );
 
+  useEffect(() => {
+    if (!onEnsureWorkspaceTree || !projectPreviewTarget) {
+      return;
+    }
+
+    const workspaceId = projectPreviewTarget.workspaceId;
+    if (treeByWorkspace[workspaceId]) {
+      return;
+    }
+
+    onEnsureWorkspaceTree(workspaceId).catch(() => undefined);
+  }, [onEnsureWorkspaceTree, projectPreviewTarget, treeByWorkspace]);
 
   return (
     <Card className="h-full overflow-hidden">
@@ -767,11 +1097,13 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
             })}
             renderItem={(workspace) => {
               const isActiveWorkspace = workspace._id === activeWorkspaceId;
-              const activeWorkspaceTree = isActiveWorkspace ? tree : undefined;
-              const isExpandedWorkspace = Boolean(activeWorkspaceTree);
+              const workspaceTree = treeByWorkspace[workspace._id];
+              const workspaceProjects = projectsByWorkspace[workspace._id] ?? [];
+              const workspaceProjectPreview = getProjectDropPreview(workspace._id);
+              const isExpandedWorkspace = isActiveWorkspace;
               const isWorkspaceDropTarget = isDropTarget("workspace", workspace._id);
-              const workspaceMeta = activeWorkspaceTree
-                ? formatCount(activeWorkspaceTree.projects.length, "project")
+              const workspaceMeta = workspaceTree
+                ? formatCount(workspaceProjects.length, "project")
                 : "Open";
 
               return {
@@ -828,10 +1160,10 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                     ) : null}
                   </div>
                 ),
-                renderChildren: (isDragging) => isExpandedWorkspace && !isDragging ? (
+                renderChildren: (isDragging) => (isExpandedWorkspace || Boolean(workspaceProjectPreview)) && !isDragging ? (
                   <div className="ml-2 space-y-0.5 pl-1.5">
                     <ReorderableList
-                      items={activeProjects}
+                      items={workspaceProjects}
                       getItemData={(project) => ({
                         kind: "project",
                         workspaceId: workspace._id,
@@ -843,6 +1175,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                           project._id === activeProjectId;
                         const isProjectDropTarget = isDropTarget("project", project._id);
                         const projectRequestPreview = getRequestDropPreview(project._id);
+                        const projectFolderPreview = getFolderDropPreview(project._id);
                         const requestCount =
                           project.requests.length +
                           project.folders.reduce(
@@ -853,73 +1186,78 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
 
                         return {
                           row: (dragHandle, isDragging) => (
-                            <div
-                              className={cn(
-                                "group relative rounded-md transition",
-                                isDragging
-                                  ? "pointer-events-none border border-dashed border-accent/35 bg-white/[0.04] pr-2"
-                                  : isProjectDropTarget
-                                    ? "bg-accent/10 pr-7 ring-1 ring-inset ring-accent/55"
-                                    : project._id === activeProjectId
-                                      ? "bg-white/[0.05] pr-7"
-                                      : "pr-7 hover:bg-white/[0.03]",
-                              )}
-                            >
-                              <div className="flex items-center gap-0.5 px-1 py-0.5">
-                                {dragHandle}
-                                <button
-                                  className="rounded-md p-0.5 text-muted transition hover:bg-white/8 hover:text-foreground"
-                                  onClick={() =>
-                                    setExpandedProjects((state) => ({
-                                      ...state,
-                                      [project._id]: !isExpandedProject,
-                                    }))
-                                  }
-                                  type="button"
-                                  aria-label={
-                                    isExpandedProject
-                                      ? "Collapse project"
-                                      : "Expand project"
-                                  }
-                                >
-                                  {isExpandedProject ? (
-                                    <ChevronDown className="h-3.5 w-3.5" />
-                                  ) : (
-                                    <ChevronRight className="h-3.5 w-3.5" />
-                                  )}
-                                </button>
-                                <button
-                                  className="min-w-0 flex-1 text-left"
-                                  onClick={() => {
-                                    setExpandedProjects((state) => ({
-                                      ...state,
-                                      [project._id]: true,
-                                    }));
-                                    onSelectProject(project._id);
-                                  }}
-                                  type="button"
-                                >
-                                  <TreeNodeContent
-                                    icon={
-                                      <Workflow className="h-3.5 w-3.5 text-sky-300" />
-                                    }
-                                    name={project.name}
-                                    meta={projectMeta}
-                                  />
-                                </button>
-                              </div>
-                              {!isDragging ? (
-                                <ContextMenus
-                                  onCreate={() => onCreateRequest(project._id)}
-                                  onRename={() => onRenameProject(project._id)}
-                                  onDuplicate={() => onDuplicateProject(project._id)}
-                                  onDelete={() => onDeleteProject(project._id)}
-                                />
+                            <div className="space-y-0.5">
+                              {workspaceProjectPreview?.beforeProjectId === project._id ? (
+                                <ProjectDropPlaceholder project={workspaceProjectPreview.project} />
                               ) : null}
+                              <div
+                                className={cn(
+                                  "group relative rounded-md transition",
+                                  isDragging
+                                    ? "pointer-events-none border border-dashed border-accent/35 bg-white/[0.04] pr-2"
+                                    : isProjectDropTarget
+                                      ? "bg-accent/10 pr-7 ring-1 ring-inset ring-accent/55"
+                                      : project._id === activeProjectId
+                                        ? "bg-white/[0.05] pr-7"
+                                        : "pr-7 hover:bg-white/[0.03]",
+                                )}
+                              >
+                                <div className="flex items-center gap-0.5 px-1 py-0.5">
+                                  {dragHandle}
+                                  <button
+                                    className="rounded-md p-0.5 text-muted transition hover:bg-white/8 hover:text-foreground"
+                                    onClick={() =>
+                                      setExpandedProjects((state) => ({
+                                        ...state,
+                                        [project._id]: !isExpandedProject,
+                                      }))
+                                    }
+                                    type="button"
+                                    aria-label={
+                                      isExpandedProject
+                                        ? "Collapse project"
+                                        : "Expand project"
+                                    }
+                                  >
+                                    {isExpandedProject ? (
+                                      <ChevronDown className="h-3.5 w-3.5" />
+                                    ) : (
+                                      <ChevronRight className="h-3.5 w-3.5" />
+                                    )}
+                                  </button>
+                                  <button
+                                    className="min-w-0 flex-1 text-left"
+                                    onClick={() => {
+                                      setExpandedProjects((state) => ({
+                                        ...state,
+                                        [project._id]: true,
+                                      }));
+                                      onSelectProject(project._id);
+                                    }}
+                                    type="button"
+                                  >
+                                    <TreeNodeContent
+                                      icon={
+                                        <Workflow className="h-3.5 w-3.5 text-sky-300" />
+                                      }
+                                      name={project.name}
+                                      meta={projectMeta}
+                                    />
+                                  </button>
+                                </div>
+                                {!isDragging ? (
+                                  <ContextMenus
+                                    onCreate={() => onCreateRequest(project._id)}
+                                    onRename={() => onRenameProject(project._id)}
+                                    onDuplicate={() => onDuplicateProject(project._id)}
+                                    onDelete={() => onDeleteProject(project._id)}
+                                  />
+                                ) : null}
+                              </div>
                             </div>
                           ),
                           renderChildren: (isDragging) =>
-                            (isExpandedProject || Boolean(projectRequestPreview)) && !isDragging ? (
+                            (isExpandedProject || Boolean(projectRequestPreview) || Boolean(projectFolderPreview)) && !isDragging ? (
                               <div className="ml-2 space-y-0.5 pl-1.5">
                                 {project.requests.length > 0 ? (
                                   <ReorderableList
@@ -962,6 +1300,9 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                                 {projectRequestPreview && !projectRequestPreview.beforeRequestId ? (
                                   <RequestDropPlaceholder request={projectRequestPreview.request} />
                                 ) : null}
+                                {projectFolderPreview && !projectFolderPreview.beforeFolderId ? (
+                                  <FolderDropPlaceholder folder={projectFolderPreview.folder} />
+                                ) : null}
                                 <ReorderableList
                                   items={foldersByProject[project._id] ?? []}
                                 getItemData={(folder) => ({
@@ -981,68 +1322,73 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
 
                                   return {
                                     row: (dragHandle, isDragging) => (
-                                      <div
-                                        className={cn(
-                                          "group relative rounded-md transition",
-                                          isDragging
-                                            ? "pointer-events-none border border-dashed border-accent/35 bg-white/[0.04] pr-2"
-                                            : isFolderDropTarget
-                                              ? "bg-accent/10 pr-7 ring-1 ring-inset ring-accent/55"
-                                              : "pr-7 hover:bg-white/[0.03]",
-                                        )}
-                                      >
-                                        <div className="flex items-center gap-0.5 px-1 py-0.5">
-                                          {dragHandle}
-                                          <button
-                                            className="rounded-md p-0.5 text-muted transition hover:bg-white/8 hover:text-foreground"
-                                            onClick={() =>
-                                              setExpandedFolders((state) => ({
-                                                ...state,
-                                                [folder._id]: !isExpandedFolder,
-                                              }))
-                                            }
-                                            type="button"
-                                            aria-label={
-                                              isExpandedFolder
-                                                ? "Collapse folder"
-                                                : "Expand folder"
-                                            }
-                                          >
-                                            {isExpandedFolder ? (
-                                              <ChevronDown className="h-3.5 w-3.5" />
-                                            ) : (
-                                              <ChevronRight className="h-3.5 w-3.5" />
-                                            )}
-                                          </button>
-                                          <div className="min-w-0 flex-1">
-                                            <TreeNodeContent
-                                              icon={
-                                                isExpandedFolder ? (
-                                                  <Folder className="h-3.5 w-3.5 text-amber-300" />
-                                                ) : (
-                                                  <FolderClosed className="h-3.5 w-3.5 text-amber-300" />
-                                                )
-                                              }
-                                              name={folder.name}
-                                              meta={formatCount(
-                                                folder.requests.length,
-                                                "request",
-                                              )}
-                                            />
-                                          </div>
-                                        </div>
-                                        {!isDragging ? (
-                                          <ContextMenus
-                                            onCreate={() =>
-                                              onCreateRequest(project._id, folder._id)
-                                            }
-                                            onRename={() => onRenameFolder(folder._id)}
-                                            onDuplicate={() =>
-                                              onDuplicateFolder(folder._id)
-                                            }
-                                            onDelete={() => onDeleteFolder(folder._id)}
-                                          />
+                                      <div className="space-y-0.5">
+                                        {projectFolderPreview?.beforeFolderId === folder._id ? (
+                                          <FolderDropPlaceholder folder={projectFolderPreview.folder} />
                                         ) : null}
+                                        <div
+                                          className={cn(
+                                            "group relative rounded-md transition",
+                                            isDragging
+                                              ? "pointer-events-none border border-dashed border-accent/35 bg-white/[0.04] pr-2"
+                                              : isFolderDropTarget
+                                                ? "bg-accent/10 pr-7 ring-1 ring-inset ring-accent/55"
+                                                : "pr-7 hover:bg-white/[0.03]",
+                                          )}
+                                        >
+                                          <div className="flex items-center gap-0.5 px-1 py-0.5">
+                                            {dragHandle}
+                                            <button
+                                              className="rounded-md p-0.5 text-muted transition hover:bg-white/8 hover:text-foreground"
+                                              onClick={() =>
+                                                setExpandedFolders((state) => ({
+                                                  ...state,
+                                                  [folder._id]: !isExpandedFolder,
+                                                }))
+                                              }
+                                              type="button"
+                                              aria-label={
+                                                isExpandedFolder
+                                                  ? "Collapse folder"
+                                                  : "Expand folder"
+                                              }
+                                            >
+                                              {isExpandedFolder ? (
+                                                <ChevronDown className="h-3.5 w-3.5" />
+                                              ) : (
+                                                <ChevronRight className="h-3.5 w-3.5" />
+                                              )}
+                                            </button>
+                                            <div className="min-w-0 flex-1">
+                                              <TreeNodeContent
+                                                icon={
+                                                  isExpandedFolder ? (
+                                                    <Folder className="h-3.5 w-3.5 text-amber-300" />
+                                                  ) : (
+                                                    <FolderClosed className="h-3.5 w-3.5 text-amber-300" />
+                                                  )
+                                                }
+                                                name={folder.name}
+                                                meta={formatCount(
+                                                  folder.requests.length,
+                                                  "request",
+                                                )}
+                                              />
+                                            </div>
+                                          </div>
+                                          {!isDragging ? (
+                                            <ContextMenus
+                                              onCreate={() =>
+                                                onCreateRequest(project._id, folder._id)
+                                              }
+                                              onRename={() => onRenameFolder(folder._id)}
+                                              onDuplicate={() =>
+                                                onDuplicateFolder(folder._id)
+                                              }
+                                              onDelete={() => onDeleteFolder(folder._id)}
+                                            />
+                                          ) : null}
+                                        </div>
                                       </div>
                                     ),
                                     renderChildren: (isDragging) =>
@@ -1107,6 +1453,9 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                         };
                       }}
                     />
+                    {workspaceProjectPreview && !workspaceProjectPreview.beforeProjectId ? (
+                      <ProjectDropPlaceholder project={workspaceProjectPreview.project} />
+                    ) : null}
                   </div>
                 ) : null,
               };

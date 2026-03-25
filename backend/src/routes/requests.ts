@@ -329,6 +329,125 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
     return { success: true };
   });
 
+  app.post<{
+    Params: { folderId: string };
+    Body: { workspaceId: string; targetProjectId: string; targetOrder?: number };
+  }>(
+    "/folders/:folderId/move",
+    { preHandler: app.authenticate },
+    async (request) => {
+      const workspace = await requireWorkspace(app, request.body.workspaceId);
+      const folder = await requireFolder(
+        app,
+        workspace._id,
+        request.params.folderId,
+      );
+      const sourceProject = await requireProject(
+        app,
+        workspace._id,
+        folder.projectId,
+      );
+      const targetProject = await requireProject(
+        app,
+        workspace._id,
+        request.body.targetProjectId,
+      );
+      const user = getRequiredUser(request);
+      if (!canAccessWorkspace(user, workspace)) {
+        throw app.httpErrors.forbidden(
+          "You do not have access to this workspace",
+        );
+      }
+
+      await app.assertProjectUnlocked(request, sourceProject, workspace);
+      await app.assertProjectUnlocked(request, targetProject, workspace);
+
+      const collection = workspaceDataCollection(app.mongo, workspace._id);
+      const now = isoNow();
+      const sourceFolders = serializeDocs(
+        await collection
+          .find({ entityType: "folder", projectId: sourceProject._id })
+          .sort({ order: 1, createdAt: 1 })
+          .toArray(),
+      ) as FolderDoc[];
+      const sourceFolderIds = sourceFolders.map((item) => item._id);
+      const sourceIndex = sourceFolderIds.indexOf(folder._id);
+
+      if (sourceIndex === -1) {
+        throw app.httpErrors.notFound("Folder not found in source project");
+      }
+
+      if (sourceProject._id === targetProject._id) {
+        const orderedIds = sourceFolderIds.filter((folderId) => folderId !== folder._id);
+        const targetOrder = clampOrder(request.body.targetOrder, orderedIds.length);
+
+        orderedIds.splice(targetOrder, 0, folder._id);
+
+        if (targetOrder !== sourceIndex) {
+          await Promise.all(
+            orderedIds.map((folderId, index) =>
+              collection.updateOne(
+                { _id: toObjectId(folderId), entityType: "folder" },
+                { $set: { order: index, updatedAt: now } },
+              ),
+            ),
+          );
+        }
+
+        return {
+          folder: await requireFolder(app, workspace._id, folder._id),
+        };
+      }
+
+      const targetFolders = serializeDocs(
+        await collection
+          .find({ entityType: "folder", projectId: targetProject._id })
+          .sort({ order: 1, createdAt: 1 })
+          .toArray(),
+      ) as FolderDoc[];
+      const sourceRemainingIds = sourceFolderIds.filter((folderId) => folderId !== folder._id);
+      const targetOrderedIds = targetFolders
+        .map((item) => item._id)
+        .filter((folderId) => folderId !== folder._id);
+      const targetOrder = clampOrder(request.body.targetOrder, targetOrderedIds.length);
+
+      targetOrderedIds.splice(targetOrder, 0, folder._id);
+
+      await Promise.all(
+        sourceRemainingIds.map((folderId, index) =>
+          collection.updateOne(
+            { _id: toObjectId(folderId), entityType: "folder" },
+            { $set: { order: index, updatedAt: now } },
+          ),
+        ),
+      );
+
+      await Promise.all(
+        targetOrderedIds.map((folderId, index) =>
+          collection.updateOne(
+            { _id: toObjectId(folderId), entityType: "folder" },
+            {
+              $set: {
+                order: index,
+                updatedAt: now,
+                ...(folderId === folder._id ? { projectId: targetProject._id } : {}),
+              },
+            },
+          ),
+        ),
+      );
+
+      await collection.updateMany(
+        { entityType: "request", folderId: folder._id },
+        { $set: { projectId: targetProject._id, updatedAt: now } },
+      );
+
+      return {
+        folder: await requireFolder(app, workspace._id, folder._id),
+      };
+    },
+  );
+
   app.delete<{
     Params: { folderId: string };
     Querystring: { workspaceId: string };

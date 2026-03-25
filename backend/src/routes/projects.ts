@@ -62,6 +62,10 @@ async function requireProject(
   return serializeDoc(project) as ProjectDoc;
 }
 
+function clampOrder(value: number | undefined, max: number) {
+  return Math.max(0, Math.min(value ?? max, max));
+}
+
 const projectRoutes: FastifyPluginAsync = async (app) => {
   app.post<{ Body: { workspaceId: string; name: string } }>(
     "/projects",
@@ -156,7 +160,11 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
 
   app.post<{
     Params: { projectId: string };
-    Body: { sourceWorkspaceId: string; targetWorkspaceId: string };
+    Body: {
+      sourceWorkspaceId: string;
+      targetWorkspaceId: string;
+      targetOrder?: number;
+    };
   }>(
     "/projects/:projectId/move",
     { preHandler: app.authenticate },
@@ -195,48 +203,51 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
       const projectFilter = {
         $or: [{ _id: toObjectId(project._id) }, { projectId: project._id }],
       };
-      const records = await workspaceDataCollection(app.mongo, sourceWorkspace._id)
-        .find(projectFilter)
-        .toArray();
+      const sourceCollection = workspaceDataCollection(app.mongo, sourceWorkspace._id);
+      const targetCollection = workspaceDataCollection(app.mongo, targetWorkspace._id);
+      const records = await sourceCollection.find(projectFilter).toArray();
       const now = isoNow();
-      const targetOrder = await workspaceDataCollection(
-        app.mongo,
-        targetWorkspace._id,
-      ).countDocuments({ entityType: "project" });
-
-      const movedRecords = records.map((record) => {
-        const nextRecord = {
-          ...record,
-          workspaceId: targetWorkspace._id,
-          updatedAt: now,
-        } as Record<string, unknown>;
-
-        if (record._id.toHexString() === project._id) {
-          nextRecord.order = targetOrder;
-        }
-
-        return nextRecord;
-      });
-
-      await workspaceDataCollection(app.mongo, targetWorkspace._id).insertMany(
-        movedRecords as never[],
-      );
-      await workspaceDataCollection(app.mongo, sourceWorkspace._id).deleteMany(
-        projectFilter,
+      const targetProjects = await targetCollection
+        .find({ entityType: "project" })
+        .sort({ order: 1, createdAt: 1 })
+        .toArray();
+      const targetProjectIds = targetProjects
+        .map((record) => record._id.toHexString())
+        .filter((projectId) => projectId !== project._id);
+      const insertIndex = clampOrder(
+        request.body.targetOrder,
+        targetProjectIds.length,
       );
 
-      const remainingProjects = await workspaceDataCollection(
-        app.mongo,
-        sourceWorkspace._id,
-      )
+      targetProjectIds.splice(insertIndex, 0, project._id);
+
+      const movedRecords = records.map((record) => ({
+        ...record,
+        workspaceId: targetWorkspace._id,
+        updatedAt: now,
+      }));
+
+      await targetCollection.insertMany(movedRecords as never[]);
+      await sourceCollection.deleteMany(projectFilter);
+
+      const remainingProjects = await sourceCollection
         .find({ entityType: "project" })
         .sort({ order: 1, createdAt: 1 })
         .toArray();
 
       await Promise.all(
         remainingProjects.map((record, index) =>
-          workspaceDataCollection(app.mongo, sourceWorkspace._id).updateOne(
+          sourceCollection.updateOne(
             { _id: record._id, entityType: "project" },
+            { $set: { order: index, updatedAt: now } },
+          ),
+        ),
+      );
+
+      await Promise.all(
+        targetProjectIds.map((projectId, index) =>
+          targetCollection.updateOne(
+            { _id: toObjectId(projectId), entityType: "project" },
             { $set: { order: index, updatedAt: now } },
           ),
         ),
