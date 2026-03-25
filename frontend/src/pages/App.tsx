@@ -15,6 +15,7 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { api } from "../lib/http-client";
+import { METHOD_TEXT_STYLES } from "../lib/methods";
 import { createEmptyRequest } from "../lib/request-helpers";
 import type { InspectorTab } from "../types";
 import { useActiveRequestStore } from "../store/activeRequest";
@@ -1070,7 +1071,7 @@ export default function App() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-3 text-sm">
-                            <span className="font-medium text-foreground">
+                            <span className={`font-medium ${METHOD_TEXT_STYLES[entry.method]}`}>
                               {entry.method}
                             </span>
                             <span className="text-muted">{entry.status}</span>
@@ -1153,6 +1154,7 @@ export default function App() {
     </>
   );
 }
+
 
 
 
