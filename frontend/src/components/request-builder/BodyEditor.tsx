@@ -1,8 +1,12 @@
+import type { RequestBodyConfig } from "@restify/shared";
 import { json } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
 import CodeMirror from "@uiw/react-codemirror";
-import type { RequestBodyConfig } from "@restify/shared";
 import { createFormValueRow } from "../../lib/request-helpers";
+import {
+  DropdownSelect,
+  type DropdownOption,
+} from "../ui/DropdownSelect";
 import { KeyValueTable } from "./KeyValueTable";
 
 interface BodyEditorProps {
@@ -10,25 +14,32 @@ interface BodyEditorProps {
   onChange: (value: RequestBodyConfig) => void;
 }
 
+const BODY_TYPE_OPTIONS: Array<DropdownOption<RequestBodyConfig["type"]>> = [
+  { value: "none", label: "None" },
+  { value: "json", label: "Raw JSON" },
+  { value: "text", label: "Raw Text" },
+  { value: "form-data", label: "Form Data" },
+  {
+    value: "x-www-form-urlencoded",
+    label: "x-www-form-urlencoded",
+  },
+];
+
 export function BodyEditor({ value, onChange }: BodyEditorProps) {
   return (
     <div className="space-y-3">
-      <select
-        className="h-9 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm text-foreground"
+      <DropdownSelect
         value={value.type}
-        onChange={(event) =>
-          onChange({
-            ...value,
-            type: event.target.value as RequestBodyConfig["type"],
-          })
+        options={BODY_TYPE_OPTIONS}
+        onChange={(type) => onChange({ ...value, type })}
+        ariaLabel="Select request body type"
+        triggerClassName="max-w-full sm:w-[220px]"
+        getItemClassName={(_option, isSelected) =>
+          isSelected
+            ? "bg-accent text-slate-950"
+            : "text-foreground hover:bg-white/[0.06]"
         }
-      >
-        <option value="none">None</option>
-        <option value="json">Raw JSON</option>
-        <option value="text">Raw Text</option>
-        <option value="form-data">Form Data</option>
-        <option value="x-www-form-urlencoded">x-www-form-urlencoded</option>
-      </select>
+      />
       {value.type === "json" || value.type === "text" ? (
         <div className="overflow-hidden rounded-xl border border-white/10 bg-[#0b1220] shadow-inner shadow-black/20">
           <CodeMirror

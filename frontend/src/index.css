@@ -47,6 +47,60 @@ textarea {
   font: inherit;
 }
 
+.app-dropdown-surface {
+  position: fixed;
+  z-index: 100;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  background: #020617;
+  padding: 0.25rem;
+  box-shadow: 0 24px 56px rgba(2, 6, 23, 0.55);
+}
+
+.app-dropdown-trigger {
+  display: flex;
+  height: 2.75rem;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  background: #020617;
+  padding: 0 0.75rem;
+  color: #e5edf9;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  outline: none;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.app-dropdown-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: #0f172a;
+}
+
+.app-dropdown-trigger:focus-visible {
+  box-shadow: 0 0 0 1px rgba(124, 196, 255, 0.45);
+}
+
+.app-dropdown-item {
+  display: flex;
+  height: 2.25rem;
+  width: 100%;
+  align-items: center;
+  border-radius: 0.5rem;
+  padding: 0 0.625rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

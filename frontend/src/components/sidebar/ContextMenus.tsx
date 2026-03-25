@@ -153,7 +153,7 @@ export function ContextMenus({
               left: menuPosition.left,
               width: MENU_WIDTH,
             }}
-            className="fixed z-[100] rounded-lg border border-white/10 bg-slate-950 p-1 shadow-2xl"
+            className="app-dropdown-surface rounded-lg"
           >
             {actions.map((action) => {
               const Icon = action.icon;
@@ -161,7 +161,7 @@ export function ContextMenus({
                 <Button
                   key={action.key}
                   variant="ghost"
-                  className={`h-8 w-full justify-start rounded-md px-2 text-xs ${action.className}`}
+                  className={`app-dropdown-item h-8 justify-start rounded-md px-2 text-xs ${action.className}`}
                   onClick={() => runAction(action.onClick)}
                 >
                   <Icon className="h-3.5 w-3.5" />
