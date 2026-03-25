@@ -615,6 +615,61 @@ export default function App() {
     selectRequest(request._id);
   };
 
+  const handleMoveRequest = async ({
+    requestId,
+    workspaceId,
+    targetProjectId,
+    targetFolderId,
+    targetOrder,
+  }: {
+    requestId: string;
+    workspaceId: string;
+    targetProjectId: string;
+    targetFolderId?: string | null;
+    targetOrder: number;
+  }) => {
+    const { request } = await api.moveRequest(requestId, {
+      workspaceId,
+      targetProjectId,
+      targetFolderId,
+      targetOrder,
+    });
+
+    selectWorkspace(workspaceId);
+    await refreshTree(workspaceId);
+    selectProject(targetProjectId);
+    selectRequest(request._id);
+  };
+
+  const handleMoveProject = async ({
+    projectId,
+    sourceWorkspaceId,
+    targetWorkspaceId,
+  }: {
+    projectId: string;
+    sourceWorkspaceId: string;
+    targetWorkspaceId: string;
+  }) => {
+    const { project } = await api.moveProject(projectId, {
+      sourceWorkspaceId,
+      targetWorkspaceId,
+    });
+
+    await loadWorkspaces();
+    selectWorkspace(targetWorkspaceId);
+    await loadWorkspaceTree(targetWorkspaceId);
+
+    const movedProject = useWorkspaceStore
+      .getState()
+      .trees[targetWorkspaceId]?.projects.find((item) => item._id === project._id);
+
+    selectProject(project._id);
+    selectRequest(
+      movedProject?.requests[0]?._id ??
+        movedProject?.folders[0]?.requests[0]?._id,
+    );
+  };
+
   const saveRequest = async () => {
     if (!draft) {
       return;
@@ -874,24 +929,18 @@ export default function App() {
                 .then(() => refreshTree(activeWorkspace._id))
                 .catch(reportError)
             }
-            onFolderReorder={(_projectId, orderedIds) =>
+            onFolderReorder={(projectId, orderedIds) =>
               activeWorkspace &&
-              activeProject &&
               api
-                .reorderFolders(
-                  activeWorkspace._id,
-                  activeProject._id,
-                  orderedIds,
-                )
+                .reorderFolders(activeWorkspace._id, projectId, orderedIds)
                 .then(() => refreshTree(activeWorkspace._id))
                 .catch(reportError)
             }
-            onRequestReorder={(orderedIds) =>
-              activeWorkspace &&
-              api
-                .reorderRequests(activeWorkspace._id, orderedIds)
-                .then(() => refreshTree(activeWorkspace._id))
-                .catch(reportError)
+            onMoveProject={(payload) =>
+              handleMoveProject(payload).catch(reportError)
+            }
+            onMoveRequest={(payload) =>
+              handleMoveRequest(payload).catch(reportError)
             }
           />
         }

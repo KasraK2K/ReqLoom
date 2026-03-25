@@ -154,6 +154,100 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
+  app.post<{
+    Params: { projectId: string };
+    Body: { sourceWorkspaceId: string; targetWorkspaceId: string };
+  }>(
+    "/projects/:projectId/move",
+    { preHandler: app.authenticate },
+    async (request) => {
+      const sourceWorkspace = await requireWorkspace(
+        app,
+        request.body.sourceWorkspaceId,
+      );
+      const targetWorkspace = await requireWorkspace(
+        app,
+        request.body.targetWorkspaceId,
+      );
+      const project = await requireProject(
+        app,
+        sourceWorkspace._id,
+        request.params.projectId,
+      );
+      const user = getRequiredUser(request);
+
+      if (sourceWorkspace._id === targetWorkspace._id) {
+        return { project };
+      }
+
+      if (
+        !canManageProject(user, project, sourceWorkspace) ||
+        !canAccessWorkspace(user, targetWorkspace) ||
+        user.role === "member"
+      ) {
+        throw app.httpErrors.forbidden(
+          "You cannot move this project to the target workspace",
+        );
+      }
+
+      await app.assertProjectUnlocked(request, project, sourceWorkspace);
+
+      const projectFilter = {
+        $or: [{ _id: toObjectId(project._id) }, { projectId: project._id }],
+      };
+      const records = await workspaceDataCollection(app.mongo, sourceWorkspace._id)
+        .find(projectFilter)
+        .toArray();
+      const now = isoNow();
+      const targetOrder = await workspaceDataCollection(
+        app.mongo,
+        targetWorkspace._id,
+      ).countDocuments({ entityType: "project" });
+
+      const movedRecords = records.map((record) => {
+        const nextRecord = {
+          ...record,
+          workspaceId: targetWorkspace._id,
+          updatedAt: now,
+        } as Record<string, unknown>;
+
+        if (record._id.toHexString() === project._id) {
+          nextRecord.order = targetOrder;
+        }
+
+        return nextRecord;
+      });
+
+      await workspaceDataCollection(app.mongo, targetWorkspace._id).insertMany(
+        movedRecords as never[],
+      );
+      await workspaceDataCollection(app.mongo, sourceWorkspace._id).deleteMany(
+        projectFilter,
+      );
+
+      const remainingProjects = await workspaceDataCollection(
+        app.mongo,
+        sourceWorkspace._id,
+      )
+        .find({ entityType: "project" })
+        .sort({ order: 1, createdAt: 1 })
+        .toArray();
+
+      await Promise.all(
+        remainingProjects.map((record, index) =>
+          workspaceDataCollection(app.mongo, sourceWorkspace._id).updateOne(
+            { _id: record._id, entityType: "project" },
+            { $set: { order: index, updatedAt: now } },
+          ),
+        ),
+      );
+
+      return {
+        project: await requireProject(app, targetWorkspace._id, project._id),
+      };
+    },
+  );
+
   app.post<{ Params: { projectId: string }; Body: { workspaceId: string } }>(
     "/projects/:projectId/duplicate",
     { preHandler: app.authenticate },

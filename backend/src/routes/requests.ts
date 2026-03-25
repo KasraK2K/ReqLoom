@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   ExecuteRequestPayload,
   FolderDoc,
   HistoryDoc,
@@ -72,6 +72,18 @@ async function requireRequestDoc(
     throw app.httpErrors.notFound("Request not found");
   }
   return serializeDoc(requestDoc) as RequestDoc;
+}
+
+function sortByOrder<T extends { order: number }>(items: T[]): T[] {
+  return [...items].sort((a, b) => a.order - b.order);
+}
+
+function normalizeFolderId(folderId?: string | null) {
+  return folderId ?? null;
+}
+
+function clampOrder(value: number | undefined, max: number) {
+  return Math.max(0, Math.min(value ?? max, max));
 }
 
 async function trimHistory(
@@ -456,6 +468,176 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
+  app.post<{
+    Params: { requestId: string };
+    Body: {
+      workspaceId: string;
+      targetProjectId: string;
+      targetFolderId?: string | null;
+      targetOrder?: number;
+    };
+  }>(
+    "/requests/:requestId/move",
+    { preHandler: app.authenticate },
+    async (request) => {
+      const workspace = await requireWorkspace(app, request.body.workspaceId);
+      const requestDoc = await requireRequestDoc(
+        app,
+        workspace._id,
+        request.params.requestId,
+      );
+      const sourceProject = await requireProject(
+        app,
+        workspace._id,
+        requestDoc.projectId,
+      );
+      const targetProject = await requireProject(
+        app,
+        workspace._id,
+        request.body.targetProjectId,
+      );
+      const user = getRequiredUser(request);
+      if (!canAccessWorkspace(user, workspace)) {
+        throw app.httpErrors.forbidden(
+          "You do not have access to this workspace",
+        );
+      }
+
+      await app.assertProjectUnlocked(request, sourceProject, workspace);
+      await app.assertProjectUnlocked(request, targetProject, workspace);
+
+      const sourceFolderId = normalizeFolderId(requestDoc.folderId);
+      const targetFolderId = normalizeFolderId(request.body.targetFolderId);
+
+      if (targetFolderId) {
+        const targetFolder = await requireFolder(app, workspace._id, targetFolderId);
+        if (targetFolder.projectId !== targetProject._id) {
+          throw app.httpErrors.badRequest(
+            "Target folder does not belong to the target project",
+          );
+        }
+      }
+
+      const relatedRequests = serializeDocs(
+        await workspaceDataCollection(app.mongo, workspace._id)
+          .find({
+            entityType: "request",
+            projectId: {
+              $in: Array.from(new Set([requestDoc.projectId, targetProject._id])),
+            },
+          })
+          .toArray(),
+      ) as RequestDoc[];
+
+      const sourceRequests = sortByOrder(
+        relatedRequests.filter(
+          (item) =>
+            item.projectId === requestDoc.projectId &&
+            normalizeFolderId(item.folderId) === sourceFolderId,
+        ),
+      );
+      const targetRequests =
+        requestDoc.projectId === targetProject._id && sourceFolderId === targetFolderId
+          ? sourceRequests
+          : sortByOrder(
+              relatedRequests.filter(
+                (item) =>
+                  item.projectId === targetProject._id &&
+                  normalizeFolderId(item.folderId) === targetFolderId,
+              ),
+            );
+
+      const sourceIndex = sourceRequests.findIndex(
+        (item) => item._id === requestDoc._id,
+      );
+      if (sourceIndex === -1) {
+        throw app.httpErrors.notFound("Request not found in source container");
+      }
+
+      const isSameContainer =
+        requestDoc.projectId === targetProject._id && sourceFolderId === targetFolderId;
+      const targetOrder = clampOrder(
+        request.body.targetOrder,
+        isSameContainer ? sourceRequests.length - 1 : targetRequests.length,
+      );
+
+      if (isSameContainer && sourceIndex === targetOrder) {
+        return { request: requestDoc };
+      }
+
+      const now = isoNow();
+      const operations = [] as Array<Record<string, unknown>>;
+
+      if (isSameContainer) {
+        const reorderedIds = sourceRequests.map((item) => item._id);
+        reorderedIds.splice(sourceIndex, 1);
+        reorderedIds.splice(targetOrder, 0, requestDoc._id);
+
+        reorderedIds.forEach((requestId, index) => {
+          operations.push({
+            updateOne: {
+              filter: { _id: toObjectId(requestId), entityType: "request" },
+              update: { $set: { order: index, updatedAt: now } },
+            },
+          });
+        });
+      } else {
+        const sourceIds = sourceRequests
+          .filter((item) => item._id !== requestDoc._id)
+          .map((item) => item._id);
+        const targetIds = targetRequests
+          .filter((item) => item._id !== requestDoc._id)
+          .map((item) => item._id);
+        targetIds.splice(targetOrder, 0, requestDoc._id);
+
+        sourceIds.forEach((requestId, index) => {
+          operations.push({
+            updateOne: {
+              filter: { _id: toObjectId(requestId), entityType: "request" },
+              update: { $set: { order: index, updatedAt: now } },
+            },
+          });
+        });
+
+        targetIds.forEach((requestId, index) => {
+          operations.push({
+            updateOne: {
+              filter: { _id: toObjectId(requestId), entityType: "request" },
+              update: {
+                $set:
+                  requestId === requestDoc._id
+                    ? {
+                        projectId: targetProject._id,
+                        folderId: targetFolderId,
+                        order: index,
+                        updatedAt: now,
+                      }
+                    : { order: index, updatedAt: now },
+              },
+            },
+          });
+        });
+      }
+
+      if (operations.length > 0) {
+        await workspaceDataCollection(app.mongo, workspace._id).bulkWrite(
+          operations as never,
+        );
+      }
+
+      if (requestDoc.projectId !== targetProject._id) {
+        await workspaceDataCollection(app.mongo, workspace._id).updateMany(
+          { entityType: "history", requestId: requestDoc._id },
+          { $set: { projectId: targetProject._id, updatedAt: now } },
+        );
+      }
+
+      return {
+        request: await requireRequestDoc(app, workspace._id, requestDoc._id),
+      };
+    },
+  );
+
   app.post<{ Params: { requestId: string }; Body: { workspaceId: string } }>(
     "/requests/:requestId/duplicate",
     { preHandler: app.authenticate },
@@ -661,4 +843,3 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
 };
 
 export default requestRoutes;
-

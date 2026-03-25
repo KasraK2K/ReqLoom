@@ -100,6 +100,14 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ workspaceId, ...values }),
     }),
+  moveProject: (
+    projectId: string,
+    payload: { sourceWorkspaceId: string; targetWorkspaceId: string },
+  ) =>
+    requestJson<{ project: ProjectDoc }>(`/projects/${projectId}/move`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   duplicateProject: (projectId: string, workspaceId: string) =>
     requestJson<{ project: ProjectDoc }>(`/projects/${projectId}/duplicate`, {
       method: "POST",
@@ -160,6 +168,19 @@ export const api = {
   ) =>
     requestJson<{ request: RequestDoc }>(`/requests/${requestId}`, {
       method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  moveRequest: (
+    requestId: string,
+    payload: {
+      workspaceId: string;
+      targetProjectId: string;
+      targetFolderId?: string | null;
+      targetOrder?: number;
+    },
+  ) =>
+    requestJson<{ request: RequestDoc }>(`/requests/${requestId}/move`, {
+      method: "POST",
       body: JSON.stringify(payload),
     }),
   duplicateRequest: (requestId: string, workspaceId: string) =>
