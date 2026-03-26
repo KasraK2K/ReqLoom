@@ -77,6 +77,7 @@ export function CreateEntityDialog({
           <label className="text-sm text-muted">{label} Name</label>
           <Input
             autoFocus
+            data-autofocus="true"
             value={name}
             onChange={(event) => setName(event.target.value)}
             onKeyDown={(event) => {

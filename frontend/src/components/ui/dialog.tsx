@@ -19,6 +19,7 @@ const FOCUSABLE_SELECTOR = [
   'select:not([disabled])',
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
+const AUTOFOCUS_SELECTOR = '[data-autofocus="true"], [autofocus]';
 
 export function Dialog({
   open,
@@ -41,6 +42,19 @@ export function Dialog({
     const previousActiveElement = document.activeElement as HTMLElement | null;
 
     const focusFirstElement = () => {
+      const autofocusElement = panel?.querySelector<HTMLElement>(AUTOFOCUS_SELECTOR);
+      if (autofocusElement) {
+        autofocusElement.focus();
+        if (
+          (autofocusElement instanceof HTMLInputElement ||
+            autofocusElement instanceof HTMLTextAreaElement) &&
+          typeof autofocusElement.select === "function"
+        ) {
+          autofocusElement.select();
+        }
+        return;
+      }
+
       const focusableElements = panel?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR);
       const firstFocusable = focusableElements?.[0];
       (firstFocusable ?? panel)?.focus();
@@ -85,10 +99,11 @@ export function Dialog({
       }
     };
 
-    focusFirstElement();
+    const focusFrame = window.requestAnimationFrame(focusFirstElement);
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
+      window.cancelAnimationFrame(focusFrame);
       document.removeEventListener("keydown", handleKeyDown);
       previousActiveElement?.focus();
     };

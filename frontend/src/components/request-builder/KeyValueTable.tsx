@@ -5,6 +5,7 @@ import type {
   QueryParamRow,
 } from "@restify/shared";
 import { Plus, Trash2 } from "lucide-react";
+import { useRef } from "react";
 import { resolveKeyValueRowsResolution } from "../../lib/var-resolver";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -31,6 +32,23 @@ export function KeyValueTable<T extends Row>({
   showEnabled = true,
   envVars,
 }: KeyValueTableProps<T>) {
+  const pendingFocusRowIdRef = useRef<string | null>(null);
+
+  const focusPendingKeyInput = (
+    rowId: string,
+    element: HTMLInputElement | null,
+  ) => {
+    if (!element || pendingFocusRowIdRef.current !== rowId) {
+      return;
+    }
+
+    pendingFocusRowIdRef.current = null;
+    window.requestAnimationFrame(() => {
+      element.focus();
+      element.select();
+    });
+  };
+
   const updateRow = (index: number, patch: Partial<T>) => {
     const nextRows = rows.map((row, rowIndex) =>
       rowIndex === index ? { ...row, ...patch } : row,
@@ -40,6 +58,12 @@ export function KeyValueTable<T extends Row>({
 
   const removeRow = (index: number) =>
     onChange(rows.filter((_, rowIndex) => rowIndex !== index));
+
+  const addRow = () => {
+    const nextRow = createRow();
+    pendingFocusRowIdRef.current = nextRow.id;
+    onChange([...rows, nextRow]);
+  };
 
   const desktopGridClass = showEnabled
     ? "md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_78px_44px]"
@@ -70,6 +94,7 @@ export function KeyValueTable<T extends Row>({
                   {keyLabel}
                 </div>
                 <Input
+                  ref={(element) => focusPendingKeyInput(row.id, element)}
                   value={row.key}
                   onChange={(event) =>
                     updateRow(index, { key: event.target.value } as Partial<T>)
@@ -131,7 +156,7 @@ export function KeyValueTable<T extends Row>({
       <Button
         variant="secondary"
         className="self-start"
-        onClick={() => onChange([...rows, createRow()])}
+        onClick={addRow}
       >
         <Plus className="h-4 w-4" />
         Add Row

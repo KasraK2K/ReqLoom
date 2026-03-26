@@ -1,5 +1,6 @@
 import type { ProjectEnvVar } from "@restify/shared";
 import { Plus, Save, Trash2 } from "lucide-react";
+import { useRef } from "react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Input } from "../ui/input";
@@ -17,12 +18,34 @@ export function EnvVarEditor({
   onChange,
   onSave,
 }: EnvVarEditorProps) {
+  const pendingFocusIndexRef = useRef<number | null>(null);
+
+  const focusPendingKeyInput = (
+    index: number,
+    element: HTMLInputElement | null,
+  ) => {
+    if (!element || pendingFocusIndexRef.current !== index) {
+      return;
+    }
+
+    pendingFocusIndexRef.current = null;
+    window.requestAnimationFrame(() => {
+      element.focus();
+      element.select();
+    });
+  };
+
   const updateRow = (index: number, patch: Partial<ProjectEnvVar>) => {
     onChange(
       envVars.map((envVar, envIndex) =>
         envIndex === index ? { ...envVar, ...patch } : envVar,
       ),
     );
+  };
+
+  const addVariable = () => {
+    pendingFocusIndexRef.current = envVars.length;
+    onChange([...envVars, { key: "", value: "" }]);
   };
 
   return (
@@ -49,6 +72,7 @@ export function EnvVarEditor({
                   Key
                 </div>
                 <Input
+                  ref={(element) => focusPendingKeyInput(index, element)}
                   value={envVar.key}
                   onChange={(event) =>
                     updateRow(index, { key: event.target.value })
@@ -89,7 +113,7 @@ export function EnvVarEditor({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Button
             variant="secondary"
-            onClick={() => onChange([...envVars, { key: "", value: "" }])}
+            onClick={addVariable}
             disabled={!projectName}
           >
             <Plus className="h-4 w-4" />
