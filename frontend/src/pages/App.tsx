@@ -144,12 +144,12 @@ export default function App() {
   const [renameDialog, setRenameDialog] = useState<RenameDialogState>(null);
   const [historyDetailsEntry, setHistoryDetailsEntry] = useState<HistoryDoc | null>(null);
   const sendAbortControllerRef = useRef<AbortController | null>(null);
-
+  const canCreateWorkspace = user?.role !== "member";
+  const canCreateProject = user?.role !== "member";
   const normalizedInspectorTab =
     user?.role === "superadmin" || inspectorTab !== "admin"
       ? inspectorTab
       : "environment";
-
   useEffect(() => {
     if (normalizedInspectorTab !== inspectorTab) {
       setInspectorTab(normalizedInspectorTab);
@@ -327,11 +327,21 @@ export default function App() {
   };
 
   const openCreateWorkspaceDialog = () => {
+    if (!canCreateWorkspace) {
+      reportError(new Error("Members cannot create workspaces."));
+      return;
+    }
+
     setRenameDialog(null);
     setCreateDialog({ kind: "workspace" });
   };
 
   const openCreateProjectDialog = () => {
+    if (!canCreateProject) {
+      reportError(new Error("Members cannot create projects."));
+      return;
+    }
+
     if (!activeWorkspace) {
       reportError(new Error("Select a workspace before creating a project."));
       return;
@@ -486,6 +496,10 @@ export default function App() {
     }
 
     if (createDialog.kind === "workspace") {
+      if (!canCreateWorkspace) {
+        throw new Error("Members cannot create workspaces.");
+      }
+
       const { workspace } = await api.createWorkspace(name);
       await loadWorkspaces();
       selectWorkspace(workspace._id);
@@ -494,6 +508,10 @@ export default function App() {
     }
 
     if (createDialog.kind === "project") {
+      if (!canCreateProject) {
+        throw new Error("Members cannot create projects.");
+      }
+
       const { project } = await api.createProject(
         createDialog.workspaceId,
         name,
@@ -795,6 +813,13 @@ export default function App() {
       return null;
     }
 
+    if (
+      (createDialog.kind === "workspace" && !canCreateWorkspace) ||
+      (createDialog.kind === "project" && !canCreateProject)
+    ) {
+      return null;
+    }
+
     if (createDialog.kind === "workspace") {
       return {
         title: "Create Workspace",
@@ -841,7 +866,7 @@ export default function App() {
       placeholder: "Request name",
       submitLabel: "Create Request",
     };
-  }, [createDialog]);
+  }, [canCreateProject, canCreateWorkspace, createDialog]);
 
   const renameDialogConfig = useMemo(() => {
     if (!renameDialog) {
@@ -924,6 +949,8 @@ export default function App() {
             }
             onSelectProject={handleSelectProject}
             onSelectRequest={selectRequest}
+            canCreateWorkspace={canCreateWorkspace}
+            canCreateProject={canCreateProject}
             onCreateWorkspace={openCreateWorkspaceDialog}
             onCreateProject={openCreateProjectDialog}
             onCreateFolder={openCreateFolderDialog}

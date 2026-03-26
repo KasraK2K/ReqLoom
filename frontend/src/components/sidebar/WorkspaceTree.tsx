@@ -99,6 +99,8 @@ interface WorkspaceTreeProps {
   activeWorkspaceId?: string;
   activeProjectId?: string;
   activeRequestId?: string;
+  canCreateWorkspace: boolean;
+  canCreateProject: boolean;
   onSelectWorkspace: (workspaceId: string) => void;
   onSelectProject: (projectId: string) => void;
   onSelectRequest: (requestId: string) => void;
@@ -429,6 +431,8 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     activeWorkspaceId,
     activeProjectId,
     activeRequestId,
+    canCreateWorkspace,
+    canCreateProject,
     onSelectWorkspace,
     onSelectProject,
     onSelectRequest,
@@ -1097,13 +1101,15 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
       <CardHeader className="px-3 py-2">
         <div className="flex w-full items-center justify-between gap-2">
           <CardTitle>Collections</CardTitle>
-          <Button
-            className="h-7 rounded-md px-2 text-xs"
-            onClick={onCreateWorkspace}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Workspace
-          </Button>
+          {canCreateWorkspace ? (
+            <Button
+              className="h-7 rounded-md px-2 text-xs"
+              onClick={onCreateWorkspace}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Workspace
+            </Button>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="overflow-y-auto p-1.5 pl-4">
@@ -1181,7 +1187,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                     </div>
                     {!isDragging ? (
                       <ContextMenus
-                        onCreate={isActiveWorkspace ? onCreateProject : undefined}
+                        onCreate={isActiveWorkspace && canCreateProject ? onCreateProject : undefined}
                         onRename={() => onRenameWorkspace(workspace._id)}
                         onDuplicate={() => onDuplicateWorkspace(workspace._id)}
                         onDelete={() => onDeleteWorkspace(workspace._id)}
