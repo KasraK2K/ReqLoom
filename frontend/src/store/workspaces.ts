@@ -2,6 +2,10 @@ import type { RequestDoc, WorkspaceMeta, WorkspaceTree } from "@restify/shared";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { api } from "../lib/http-client";
+import {
+  findRequestInProject,
+  getFirstProjectRequestId,
+} from "../lib/workspace-tree";
 
 type TreeProject = WorkspaceTree["projects"][number];
 
@@ -26,14 +30,6 @@ interface WorkspaceState {
 
 const WORKSPACE_SELECTION_KEY = "httpclient.workspace-selection";
 
-function getFirstRequestId(project?: TreeProject): string | undefined {
-  if (!project) {
-    return undefined;
-  }
-
-  return project.requests[0]?._id ?? project.folders[0]?.requests[0]?._id;
-}
-
 function projectContainsRequest(
   project: TreeProject | undefined,
   requestId?: string,
@@ -42,10 +38,7 @@ function projectContainsRequest(
     return false;
   }
 
-  return [
-    ...project.requests,
-    ...project.folders.flatMap((folder) => folder.requests),
-  ].some((request) => request._id === requestId);
+  return Boolean(findRequestInProject(project, requestId));
 }
 
 export const useWorkspaceStore = create<WorkspaceState>()(
@@ -89,7 +82,7 @@ export const useWorkspaceStore = create<WorkspaceState>()(
               state.activeRequestId,
             )
               ? state.activeRequestId
-              : getFirstRequestId(activeProject),
+              : getFirstProjectRequestId(activeProject),
           };
         });
       },
@@ -111,14 +104,11 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       getActiveRequest: () => {
         const { activeRequestId } = get();
         const project = get().getActiveProject();
-        if (!project) {
+        if (!project || !activeRequestId) {
           return undefined;
         }
 
-        return [
-          ...project.requests,
-          ...project.folders.flatMap((folder) => folder.requests),
-        ].find((request) => request._id === activeRequestId);
+        return findRequestInProject(project, activeRequestId);
       },
     }),
     {

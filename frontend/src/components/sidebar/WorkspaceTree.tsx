@@ -38,6 +38,7 @@ import {
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { cn } from "../../lib/cn";
 import { METHOD_TEXT_STYLES } from "../../lib/methods";
+import { flattenFolders } from "../../lib/workspace-tree";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { ContextMenus } from "./ContextMenus";
@@ -55,6 +56,13 @@ type TreeDragData =
   | { kind: "project"; workspaceId: string; projectId: string }
   | {
       kind: "folder";
+      workspaceId: string;
+      projectId: string;
+      folderId: string;
+      parentFolderId?: string | null;
+    }
+  | {
+      kind: "folder-container";
       workspaceId: string;
       projectId: string;
       folderId: string;
@@ -86,6 +94,7 @@ interface FolderMovePayload {
   folderId: string;
   workspaceId: string;
   targetProjectId: string;
+  targetParentFolderId?: string | null;
   targetOrder: number;
 }
 
@@ -109,7 +118,7 @@ interface WorkspaceTreeProps {
   onSelectRequest: (requestId: string) => void;
   onCreateWorkspace: () => void;
   onCreateProject: () => void;
-  onCreateFolder: (projectId: string) => void;
+  onCreateFolder: (projectId: string, parentFolderId?: string | null) => void;
   onCreateRequest: (projectId: string, folderId?: string | null) => void;
   onRenameWorkspace: (workspaceId: string) => void;
   onRenameProject: (projectId: string) => void;
@@ -158,8 +167,15 @@ function normalizeFolderId(folderId?: string | null) {
 function getRequestContainerKey(projectId: string, folderId?: string | null) {
   const normalizedFolderId = normalizeFolderId(folderId);
   return normalizedFolderId
-    ? `folder:${normalizedFolderId}`
-    : `project:${projectId}:root`;
+    ? `folder:${normalizedFolderId}:requests`
+    : `project:${projectId}:requests`;
+}
+
+function getFolderContainerKey(projectId: string, parentFolderId?: string | null) {
+  const normalizedParentFolderId = normalizeFolderId(parentFolderId);
+  return normalizedParentFolderId
+    ? `folder:${normalizedParentFolderId}:folders`
+    : `project:${projectId}:folders`;
 }
 
 function getDragEntityId(data: TreeDragData) {
@@ -170,6 +186,8 @@ function getDragEntityId(data: TreeDragData) {
       return data.projectId;
     case "folder":
       return data.folderId;
+    case "folder-container":
+      return `folder-container:${data.folderId}`;
     case "request":
       return data.requestId;
   }
@@ -315,6 +333,7 @@ function PrivacyToggleButton({
     </button>
   );
 }
+
 function DropPlaceholderShell({ children }: { children: ReactNode }) {
   return (
     <div className="ml-5 rounded-md border border-dashed border-accent/45 bg-accent/8 px-2 py-1">
@@ -463,6 +482,7 @@ function RequestItem({
     </div>
   );
 }
+
 function reorderIds(items: SortableItem[], activeId: string, overId: string) {
   const oldIndex = items.findIndex((item) => item._id === activeId);
   const newIndex = items.findIndex((item) => item._id === overId);
@@ -508,7 +528,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     onToggleRequestPrivacy,
     onWorkspaceReorder,
     onProjectReorder,
-    onFolderReorder,
+    onFolderReorder: _onFolderReorder,
     onMoveProject,
     onMoveFolder,
     onMoveRequest,
@@ -565,20 +585,11 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
 
     return map;
   }, [treeByWorkspace]);
-  const foldersByProject = useMemo(() => {
-    const map: Record<string, TreeFolder[]> = {};
-
-    Object.values(projectById).forEach((project) => {
-      map[project._id] = sortByOrder(project.folders);
-    });
-
-    return map;
-  }, [projectById]);
   const folderById = useMemo(() => {
     const map: Record<string, TreeFolder> = {};
 
     Object.values(projectById).forEach((project) => {
-      project.folders.forEach((folder) => {
+      flattenFolders(project.folders).forEach((folder) => {
         map[folder._id] = folder;
       });
     });
@@ -593,7 +604,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
       project.requests.forEach((request) => {
         map[request._id] = request;
       });
-      project.folders.forEach((folder) => {
+      flattenFolders(project.folders).forEach((folder) => {
         folder.requests.forEach((request) => {
           map[request._id] = request;
         });
@@ -602,19 +613,48 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
 
     return map;
   }, [activeProjects]);
+
+  const folderContainerIds = useMemo(() => {
+    const containers: Record<string, string[]> = {};
+
+    const visitFolderContainer = (
+      projectId: string,
+      folders: TreeFolder[],
+      parentFolderId: string | null,
+    ) => {
+      containers[getFolderContainerKey(projectId, parentFolderId)] = sortByOrder(
+        folders,
+      ).map((folder) => folder._id);
+
+      sortByOrder(folders).forEach((folder) => {
+        visitFolderContainer(projectId, folder.folders, folder._id);
+      });
+    };
+
+    activeProjects.forEach((project) => {
+      visitFolderContainer(project._id, project.folders, null);
+    });
+
+    return containers;
+  }, [activeProjects]);
+
   const requestContainerIds = useMemo(() => {
     const containers: Record<string, string[]> = {};
+
+    const visitRequests = (projectId: string, folders: TreeFolder[]) => {
+      folders.forEach((folder) => {
+        containers[getRequestContainerKey(projectId, folder._id)] = sortByOrder(
+          folder.requests,
+        ).map((request) => request._id);
+        visitRequests(projectId, folder.folders);
+      });
+    };
 
     activeProjects.forEach((project) => {
       containers[getRequestContainerKey(project._id)] = sortByOrder(
         project.requests,
       ).map((request) => request._id);
-
-      project.folders.forEach((folder) => {
-        containers[getRequestContainerKey(project._id, folder._id)] = sortByOrder(
-          folder.requests,
-        ).map((request) => request._id);
-      });
+      visitRequests(project._id, project.folders);
     });
 
     return containers;
@@ -756,17 +796,39 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     }
 
     if (activeData.kind === "folder") {
+      const sourceContainerKey = getFolderContainerKey(
+        activeData.projectId,
+        activeData.parentFolderId,
+      );
+      const sourceFolderIds = folderContainerIds[sourceContainerKey] ?? [];
+
       const resolveFolderTarget = () => {
         if (overData.kind === "folder") {
           return {
             projectId: overData.projectId,
+            parentFolderId: normalizeFolderId(overData.parentFolderId),
+            containerKey: getFolderContainerKey(
+              overData.projectId,
+              overData.parentFolderId,
+            ),
             overFolderId: overData.folderId,
+          };
+        }
+
+        if (overData.kind === "folder-container") {
+          return {
+            projectId: overData.projectId,
+            parentFolderId: overData.folderId,
+            containerKey: getFolderContainerKey(overData.projectId, overData.folderId),
+            overFolderId: null,
           };
         }
 
         if (overData.kind === "project") {
           return {
             projectId: overData.projectId,
+            parentFolderId: null,
+            containerKey: getFolderContainerKey(overData.projectId, null),
             overFolderId: null,
           };
         }
@@ -779,26 +841,44 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
         return;
       }
 
-      const sourceFolders = foldersByProject[activeData.projectId] ?? [];
-      const sourceFolderIds = sourceFolders.map((item) => item._id);
-      const isSameProject = activeData.projectId === target.projectId;
-
-      if (isSameProject && overData.kind === "folder") {
-        const orderedIds = reorderIds(
-          sourceFolders,
-          activeData.folderId,
-          overData.folderId,
-        );
-        if (orderedIds) {
-          onFolderReorder(activeData.projectId, orderedIds);
-        }
+      if (
+        overData.kind === "folder" &&
+        activeData.folderId === overData.folderId &&
+        sourceContainerKey === target.containerKey
+      ) {
         return;
       }
 
-      const targetFolders = foldersByProject[target.projectId] ?? [];
-      const targetIdsWithoutActive = targetFolders
-        .map((item) => item._id)
-        .filter((folderId) => folderId !== activeData.folderId);
+      const targetFolderIds = folderContainerIds[target.containerKey] ?? [];
+      const isSameContainer = sourceContainerKey === target.containerKey;
+
+      if (isSameContainer && overData.kind === "folder") {
+        const orderedIds = reorderIds(
+          sourceFolderIds.map((folderId, index) => ({
+            _id: folderId,
+            order: index,
+          })),
+          activeData.folderId,
+          overData.folderId,
+        );
+
+        if (!orderedIds) {
+          return;
+        }
+
+        onMoveFolder({
+          folderId: activeData.folderId,
+          workspaceId: activeData.workspaceId,
+          targetProjectId: target.projectId,
+          targetParentFolderId: target.parentFolderId,
+          targetOrder: orderedIds.indexOf(activeData.folderId),
+        });
+        return;
+      }
+
+      const targetIdsWithoutActive = targetFolderIds.filter(
+        (folderId) => folderId !== activeData.folderId,
+      );
       const targetOrder =
         overData.kind === "folder" && target.overFolderId
           ? targetIdsWithoutActive.indexOf(target.overFolderId)
@@ -809,16 +889,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
       );
       const currentIndex = sourceFolderIds.indexOf(activeData.folderId);
 
-      if (isSameProject) {
-        if (currentIndex === normalizedTargetOrder) {
-          return;
-        }
-
-        const orderedIds = sourceFolderIds.filter(
-          (folderId) => folderId !== activeData.folderId,
-        );
-        orderedIds.splice(normalizedTargetOrder, 0, activeData.folderId);
-        onFolderReorder(activeData.projectId, orderedIds);
+      if (isSameContainer && currentIndex === normalizedTargetOrder) {
         return;
       }
 
@@ -826,6 +897,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
         folderId: activeData.folderId,
         workspaceId: activeData.workspaceId,
         targetProjectId: target.projectId,
+        targetParentFolderId: target.parentFolderId,
         targetOrder: normalizedTargetOrder,
       });
       return;
@@ -871,6 +943,15 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
             overData.projectId,
             overData.folderId,
           ),
+          overRequestId: null,
+        };
+      }
+
+      if (overData.kind === "folder-container") {
+        return {
+          projectId: overData.projectId,
+          folderId: overData.folderId,
+          containerKey: getRequestContainerKey(overData.projectId, overData.folderId),
           overRequestId: null,
         };
       }
@@ -1014,14 +1095,33 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
 
     if (dropTarget.data.kind === "folder") {
       return {
+        containerKey: getFolderContainerKey(
+          dropTarget.data.projectId,
+          dropTarget.data.parentFolderId,
+        ),
         projectId: dropTarget.data.projectId,
+        parentFolderId: normalizeFolderId(dropTarget.data.parentFolderId),
         overFolderId: dropTarget.data.folderId,
+      };
+    }
+
+    if (dropTarget.data.kind === "folder-container") {
+      return {
+        containerKey: getFolderContainerKey(
+          dropTarget.data.projectId,
+          dropTarget.data.folderId,
+        ),
+        projectId: dropTarget.data.projectId,
+        parentFolderId: dropTarget.data.folderId,
+        overFolderId: null,
       };
     }
 
     if (dropTarget.data.kind === "project") {
       return {
+        containerKey: getFolderContainerKey(dropTarget.data.projectId, null),
         projectId: dropTarget.data.projectId,
+        parentFolderId: null,
         overFolderId: null,
       };
     }
@@ -1038,7 +1138,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
   );
 
   const getFolderDropPreview = useCallback(
-    (projectId: string) => {
+    (projectId: string, parentFolderId?: string | null) => {
       if (
         activeDragData?.kind !== "folder" ||
         !activeDraggedFolder ||
@@ -1047,11 +1147,16 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
         return null;
       }
 
-      if (folderPreviewTarget.projectId !== projectId) {
+      const targetContainerKey = getFolderContainerKey(projectId, parentFolderId);
+      if (folderPreviewTarget.containerKey !== targetContainerKey) {
         return null;
       }
 
-      if (activeDragData.projectId === projectId) {
+      const sourceContainerKey = getFolderContainerKey(
+        activeDragData.projectId,
+        activeDragData.parentFolderId,
+      );
+      if (sourceContainerKey === targetContainerKey) {
         return null;
       }
 
@@ -1086,6 +1191,16 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     }
 
     if (dropTarget.data.kind === "folder") {
+      return {
+        containerKey: getRequestContainerKey(
+          dropTarget.data.projectId,
+          dropTarget.data.folderId,
+        ),
+        overRequestId: null,
+      };
+    }
+
+    if (dropTarget.data.kind === "folder-container") {
       return {
         containerKey: getRequestContainerKey(
           dropTarget.data.projectId,
@@ -1150,6 +1265,278 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     onEnsureWorkspaceTree(workspaceId).catch(() => undefined);
   }, [onEnsureWorkspaceTree, projectPreviewTarget, treeByWorkspace]);
 
+  function renderRequestList(
+    workspaceId: string,
+    projectId: string,
+    requests: RequestDoc[],
+    folderId?: string | null,
+  ) {
+    const requestPreview = getRequestDropPreview(projectId, folderId);
+
+    return (
+      <>
+        {requests.length > 0 ? (
+          <ReorderableList
+            items={sortByOrder(requests)}
+            getItemData={(request) => ({
+              kind: "request",
+              workspaceId,
+              projectId,
+              folderId: folderId ?? null,
+              requestId: request._id,
+            })}
+            renderItem={(request) => ({
+              row: (dragHandle, isDragging) => (
+                <div className="space-y-0.5">
+                  {requestPreview?.beforeRequestId === request._id ? (
+                    <RequestDropPlaceholder request={requestPreview.request} />
+                  ) : null}
+                  <div className="flex items-center gap-0.5">
+                    {dragHandle}
+                    <div className="min-w-0 flex-1">
+                      <RequestItem
+                        request={request}
+                        activeRequestId={activeRequestId}
+                        onSelectRequest={onSelectRequest}
+                        onRenameRequest={onRenameRequest}
+                        onDuplicateRequest={onDuplicateRequest}
+                        onDeleteRequest={onDeleteRequest}
+                        onTogglePrivacy={(requestId, isPrivate) =>
+                          onToggleRequestPrivacy(workspaceId, requestId, isPrivate)
+                        }
+                        canManagePrivacy={canManagePrivacy}
+                        isDragging={isDragging}
+                        isDropTarget={isDropTarget("request", request._id)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ),
+            })}
+          />
+        ) : null}
+        {requestPreview && !requestPreview.beforeRequestId ? (
+          <DropPlaceholderTarget
+            id={
+              folderId
+                ? `request-end:folder:${folderId}`
+                : `request-end:project:${projectId}`
+            }
+            data={
+              folderId
+                ? {
+                    kind: "folder-container",
+                    workspaceId,
+                    projectId,
+                    folderId,
+                  }
+                : {
+                    kind: "project",
+                    workspaceId,
+                    projectId,
+                  }
+            }
+          >
+            <RequestDropPlaceholder request={requestPreview.request} />
+          </DropPlaceholderTarget>
+        ) : null}
+      </>
+    );
+  }
+
+  function renderFolderList(
+    workspaceId: string,
+    projectId: string,
+    folders: TreeFolder[],
+    parentFolderId?: string | null,
+  ) {
+    const folderPreview = getFolderDropPreview(projectId, parentFolderId);
+
+    return (
+      <>
+        {folders.length > 0 ? (
+          <ReorderableList
+            items={sortByOrder(folders)}
+            getItemData={(folder) => ({
+              kind: "folder",
+              workspaceId,
+              projectId,
+              folderId: folder._id,
+              parentFolderId: folder.parentFolderId ?? null,
+            })}
+            renderItem={(folder) => {
+              const isExpandedFolder = expandedFolders[folder._id] ?? true;
+              const isFolderDropTarget = isDropTarget("folder", folder._id);
+              const folderRequestPreview = getRequestDropPreview(projectId, folder._id);
+              const childFolderPreview = getFolderDropPreview(projectId, folder._id);
+
+              return {
+                row: (dragHandle, isDragging) => (
+                  <div className="space-y-0.5">
+                    {folderPreview?.beforeFolderId === folder._id ? (
+                      <FolderDropPlaceholder folder={folderPreview.folder} />
+                    ) : null}
+                    <div
+                      className={cn(
+                        "group relative rounded-md transition",
+                        isDragging
+                          ? "pointer-events-none border border-dashed border-accent/35 bg-white/[0.04] pr-2"
+                          : isFolderDropTarget
+                            ? cn(
+                                "bg-accent/10 ring-1 ring-inset ring-accent/55",
+                                canManagePrivacy ? "pr-14" : "pr-7",
+                              )
+                            : cn(
+                                canManagePrivacy ? "pr-14" : "pr-7",
+                                "hover:bg-white/[0.03]",
+                              ),
+                      )}
+                    >
+                      <div className="flex items-center gap-0.5 px-1 py-0.5">
+                        {dragHandle}
+                        <button
+                          className="rounded-md p-0.5 text-muted transition hover:bg-white/8 hover:text-foreground"
+                          onClick={() =>
+                            setExpandedFolders((state) => ({
+                              ...state,
+                              [folder._id]: !isExpandedFolder,
+                            }))
+                          }
+                          type="button"
+                          aria-label={
+                            isExpandedFolder
+                              ? "Collapse folder"
+                              : "Expand folder"
+                          }
+                        >
+                          {isExpandedFolder ? (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                          <span className="shrink-0">
+                            {isExpandedFolder ? (
+                              <Folder className="h-3.5 w-3.5 text-amber-300" />
+                            ) : (
+                              <FolderClosed className="h-3.5 w-3.5 text-amber-300" />
+                            )}
+                          </span>
+                          <span
+                            className="min-w-0 flex-1 truncate text-[13px] leading-5 text-foreground"
+                            title={folder.name}
+                          >
+                            {folder.name}
+                          </span>
+                        </div>
+                      </div>
+                      {!isDragging ? (
+                        <ContextMenus
+                          leadingAccessory={
+                            canManagePrivacy ? (
+                              <PrivacyToggleButton
+                                isPrivate={folder.isPrivate}
+                                label="folder"
+                                onToggle={(isPrivate) =>
+                                  onToggleFolderPrivacy(workspaceId, folder._id, isPrivate)
+                                }
+                              />
+                            ) : null
+                          }
+                          onCreate={() => onCreateRequest(projectId, folder._id)}
+                          onRename={() => onRenameFolder(folder._id)}
+                          onDuplicate={() => onDuplicateFolder(folder._id)}
+                          onDelete={() => onDeleteFolder(folder._id)}
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+                ),
+                renderChildren: (isDragging) =>
+                  (isExpandedFolder ||
+                    Boolean(folderRequestPreview) ||
+                    Boolean(childFolderPreview)) &&
+                  !isDragging ? (
+                    <DropPlaceholderTarget
+                      id={`folder-container:${folder._id}`}
+                      data={{
+                        kind: "folder-container",
+                        workspaceId,
+                        projectId,
+                        folderId: folder._id,
+                      }}
+                    >
+                      <div className="ml-2 space-y-0.5 pl-1.5">
+                        {renderRequestList(
+                          workspaceId,
+                          projectId,
+                          folder.requests,
+                          folder._id,
+                        )}
+                        {renderFolderList(
+                          workspaceId,
+                          projectId,
+                          folder.folders,
+                          folder._id,
+                        )}
+                        {childFolderPreview && !childFolderPreview.beforeFolderId ? (
+                          <DropPlaceholderTarget
+                            id={`folder-end:folder:${folder._id}`}
+                            data={{
+                              kind: "folder-container",
+                              workspaceId,
+                              projectId,
+                              folderId: folder._id,
+                            }}
+                          >
+                            <FolderDropPlaceholder folder={childFolderPreview.folder} />
+                          </DropPlaceholderTarget>
+                        ) : null}
+                        <Button
+                          variant="ghost"
+                          className="h-6 w-full justify-start rounded-md px-1.5 text-[12px] text-muted hover:bg-white/[0.04] hover:text-foreground"
+                          onClick={() => onCreateFolder(projectId, folder._id)}
+                        >
+                          <Plus className="h-3 w-3" />
+                          Add folder
+                        </Button>
+                      </div>
+                    </DropPlaceholderTarget>
+                  ) : null,
+              };
+            }}
+          />
+        ) : null}
+        {folderPreview && !folderPreview.beforeFolderId ? (
+          <DropPlaceholderTarget
+            id={
+              parentFolderId
+                ? `folder-end:folder:${parentFolderId}`
+                : `folder-end:project:${projectId}`
+            }
+            data={
+              parentFolderId
+                ? {
+                    kind: "folder-container",
+                    workspaceId,
+                    projectId,
+                    folderId: parentFolderId,
+                  }
+                : {
+                    kind: "project",
+                    workspaceId,
+                    projectId,
+                  }
+            }
+          >
+            <FolderDropPlaceholder folder={folderPreview.folder} />
+          </DropPlaceholderTarget>
+        ) : null}
+      </>
+    );
+  }
+
   return (
     <Card className="h-full overflow-hidden">
       <CardHeader className="px-3 py-2">
@@ -1186,11 +1573,11 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
             })}
             renderItem={(workspace) => {
               const isActiveWorkspace = workspace._id === activeWorkspaceId;
-              const workspaceTree = treeByWorkspace[workspace._id];
               const workspaceProjects = projectsByWorkspace[workspace._id] ?? [];
               const workspaceProjectPreview = getProjectDropPreview(workspace._id);
               const isExpandedWorkspace = isActiveWorkspace;
               const isWorkspaceDropTarget = isDropTarget("workspace", workspace._id);
+
               return {
                 row: (dragHandle, isDragging) => (
                   <div
@@ -1236,7 +1623,9 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                     </div>
                     {!isDragging ? (
                       <ContextMenus
-                        onCreate={isActiveWorkspace && canCreateProject ? onCreateProject : undefined}
+                        onCreate={
+                          isActiveWorkspace && canCreateProject ? onCreateProject : undefined
+                        }
                         onRename={() => onRenameWorkspace(workspace._id)}
                         onDuplicate={() => onDuplicateWorkspace(workspace._id)}
                         onDelete={() => onDeleteWorkspace(workspace._id)}
@@ -1244,363 +1633,176 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                     ) : null}
                   </div>
                 ),
-                renderChildren: (isDragging) => (isExpandedWorkspace || Boolean(workspaceProjectPreview)) && !isDragging ? (
-                  <div className="ml-2 space-y-0.5 pl-1.5">
-                    <ReorderableList
-                      items={workspaceProjects}
-                      getItemData={(project) => ({
-                        kind: "project",
-                        workspaceId: workspace._id,
-                        projectId: project._id,
-                      })}
-                      renderItem={(project) => {
-                        const isExpandedProject =
-                          expandedProjects[project._id] ??
-                          project._id === activeProjectId;
-                        const isProjectDropTarget = isDropTarget("project", project._id);
-                        const projectRequestPreview = getRequestDropPreview(project._id);
-                        const projectFolderPreview = getFolderDropPreview(project._id);
-                        return {
-                          row: (dragHandle, isDragging) => (
-                            <div className="space-y-0.5">
-                              {workspaceProjectPreview?.beforeProjectId === project._id ? (
-                                <ProjectDropPlaceholder project={workspaceProjectPreview.project} />
-                              ) : null}
-                              <div
-                                className={cn(
-                                  "group relative rounded-md transition",
-                                  isDragging
-                                    ? "pointer-events-none border border-dashed border-accent/35 bg-white/[0.04] pr-2"
-                                    : isProjectDropTarget
-                                      ? cn("bg-accent/10 ring-1 ring-inset ring-accent/55", canManagePrivacy ? "pr-14" : "pr-7")
-                                      : project._id === activeProjectId
-                                        ? cn("bg-white/[0.05]", canManagePrivacy ? "pr-14" : "pr-7")
-                                        : cn(canManagePrivacy ? "pr-14" : "pr-7", "hover:bg-white/[0.03]"),
-                                )}
-                              >
-                                <div className="flex items-center gap-0.5 px-1 py-0.5">
-                                  {dragHandle}
-                                  <button
-                                    className="rounded-md p-0.5 text-muted transition hover:bg-white/8 hover:text-foreground"
-                                    onClick={() =>
-                                      setExpandedProjects((state) => ({
-                                        ...state,
-                                        [project._id]: !isExpandedProject,
-                                      }))
-                                    }
-                                    type="button"
-                                    aria-label={
-                                      isExpandedProject
-                                        ? "Collapse project"
-                                        : "Expand project"
-                                    }
-                                  >
-                                    {isExpandedProject ? (
-                                      <ChevronDown className="h-3.5 w-3.5" />
-                                    ) : (
-                                      <ChevronRight className="h-3.5 w-3.5" />
-                                    )}
-                                  </button>
-                                  <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                                    <span className="shrink-0">
-                                      <Workflow className="h-3.5 w-3.5 text-sky-300" />
-                                    </span>
+                renderChildren: (isDragging) =>
+                  (isExpandedWorkspace || Boolean(workspaceProjectPreview)) && !isDragging ? (
+                    <div className="ml-2 space-y-0.5 pl-1.5">
+                      <ReorderableList
+                        items={workspaceProjects}
+                        getItemData={(project) => ({
+                          kind: "project",
+                          workspaceId: workspace._id,
+                          projectId: project._id,
+                        })}
+                        renderItem={(project) => {
+                          const isExpandedProject =
+                            expandedProjects[project._id] ??
+                            project._id === activeProjectId;
+                          const isProjectDropTarget = isDropTarget("project", project._id);
+                          const projectRequestPreview = getRequestDropPreview(project._id);
+                          const projectFolderPreview = getFolderDropPreview(project._id, null);
+
+                          return {
+                            row: (dragHandle, isDragging) => (
+                              <div className="space-y-0.5">
+                                {workspaceProjectPreview?.beforeProjectId === project._id ? (
+                                  <ProjectDropPlaceholder project={workspaceProjectPreview.project} />
+                                ) : null}
+                                <div
+                                  className={cn(
+                                    "group relative rounded-md transition",
+                                    isDragging
+                                      ? "pointer-events-none border border-dashed border-accent/35 bg-white/[0.04] pr-2"
+                                      : isProjectDropTarget
+                                        ? cn(
+                                            "bg-accent/10 ring-1 ring-inset ring-accent/55",
+                                            canManagePrivacy ? "pr-14" : "pr-7",
+                                          )
+                                        : project._id === activeProjectId
+                                          ? cn(
+                                              "bg-white/[0.05]",
+                                              canManagePrivacy ? "pr-14" : "pr-7",
+                                            )
+                                          : cn(
+                                              canManagePrivacy ? "pr-14" : "pr-7",
+                                              "hover:bg-white/[0.03]",
+                                            ),
+                                  )}
+                                >
+                                  <div className="flex items-center gap-0.5 px-1 py-0.5">
+                                    {dragHandle}
                                     <button
-                                      className={cn(
-                                        "min-w-0 flex-1 truncate text-left text-[13px] leading-5 text-foreground",
-                                        project._id === activeProjectId && "font-medium",
-                                      )}
-                                      onClick={() => {
+                                      className="rounded-md p-0.5 text-muted transition hover:bg-white/8 hover:text-foreground"
+                                      onClick={() =>
                                         setExpandedProjects((state) => ({
                                           ...state,
-                                          [project._id]: true,
-                                        }));
-                                        onSelectProject(project._id);
-                                      }}
+                                          [project._id]: !isExpandedProject,
+                                        }))
+                                      }
                                       type="button"
-                                      title={project.name}
+                                      aria-label={
+                                        isExpandedProject
+                                          ? "Collapse project"
+                                          : "Expand project"
+                                      }
                                     >
-                                      {project.name}
+                                      {isExpandedProject ? (
+                                        <ChevronDown className="h-3.5 w-3.5" />
+                                      ) : (
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                      )}
                                     </button>
-
+                                    <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                                      <span className="shrink-0">
+                                        <Workflow className="h-3.5 w-3.5 text-sky-300" />
+                                      </span>
+                                      <button
+                                        className={cn(
+                                          "min-w-0 flex-1 truncate text-left text-[13px] leading-5 text-foreground",
+                                          project._id === activeProjectId && "font-medium",
+                                        )}
+                                        onClick={() => {
+                                          setExpandedProjects((state) => ({
+                                            ...state,
+                                            [project._id]: true,
+                                          }));
+                                          onSelectProject(project._id);
+                                        }}
+                                        type="button"
+                                        title={project.name}
+                                      >
+                                        {project.name}
+                                      </button>
+                                    </div>
                                   </div>
+                                  {!isDragging ? (
+                                    <ContextMenus
+                                      leadingAccessory={
+                                        canManagePrivacy ? (
+                                          <PrivacyToggleButton
+                                            isPrivate={project.isPrivate}
+                                            label="project"
+                                            onToggle={(isPrivate) =>
+                                              onToggleProjectPrivacy(
+                                                workspace._id,
+                                                project._id,
+                                                isPrivate,
+                                              )
+                                            }
+                                          />
+                                        ) : null
+                                      }
+                                      onCreate={() => onCreateRequest(project._id)}
+                                      onRename={() => onRenameProject(project._id)}
+                                      onDuplicate={() => onDuplicateProject(project._id)}
+                                      onDelete={() => onDeleteProject(project._id)}
+                                    />
+                                  ) : null}
                                 </div>
-                                {!isDragging ? (
-                                  <ContextMenus
-                                    leadingAccessory={
-                                      canManagePrivacy ? (
-                                        <PrivacyToggleButton
-                                          isPrivate={project.isPrivate}
-                                          label="project"
-                                          onToggle={(isPrivate) =>
-                                            onToggleProjectPrivacy(workspace._id, project._id, isPrivate)
-                                          }
-                                        />
-                                      ) : null
-                                    }
-                                    onCreate={() => onCreateRequest(project._id)}
-                                    onRename={() => onRenameProject(project._id)}
-                                    onDuplicate={() => onDuplicateProject(project._id)}
-                                    onDelete={() => onDeleteProject(project._id)}
-                                  />
-                                ) : null}
                               </div>
-                            </div>
-                          ),
-                          renderChildren: (isDragging) =>
-                            (isExpandedProject || Boolean(projectRequestPreview) || Boolean(projectFolderPreview)) && !isDragging ? (
-                              <div className="ml-2 space-y-0.5 pl-1.5">
-                                {project.requests.length > 0 ? (
-                                  <ReorderableList
-                                    items={sortByOrder(project.requests)}
-                                    getItemData={(request) => ({
-                                      kind: "request",
-                                      workspaceId: workspace._id,
-                                      projectId: project._id,
-                                      folderId: null,
-                                      requestId: request._id,
-                                    })}
-                                    renderItem={(request) => ({
-                                      row: (dragHandle, isDragging) => (
-                                        <div className="space-y-0.5">
-                                          {projectRequestPreview?.beforeRequestId === request._id ? (
-                                            <RequestDropPlaceholder
-                                              request={projectRequestPreview.request}
-                                            />
-                                          ) : null}
-                                          <div className="flex items-center gap-0.5">
-                                            {dragHandle}
-                                            <div className="min-w-0 flex-1">
-                                              <RequestItem
-                                                request={request}
-                                                activeRequestId={activeRequestId}
-                                                onSelectRequest={onSelectRequest}
-                                                onRenameRequest={onRenameRequest}
-                                                onDuplicateRequest={onDuplicateRequest}
-                                                onDeleteRequest={onDeleteRequest}
-                                                onTogglePrivacy={(requestId, isPrivate) =>
-                                                  onToggleRequestPrivacy(workspace._id, requestId, isPrivate)
-                                                }
-                                                canManagePrivacy={canManagePrivacy}
-                                                isDragging={isDragging}
-                                                isDropTarget={isDropTarget("request", request._id)}
-                                              />
-                                            </div>
-                                          </div>
-                                        </div>
-                                      ),
-                                    })}
-                                  />
-                                ) : null}
-                                {projectRequestPreview && !projectRequestPreview.beforeRequestId ? (
-                                  <DropPlaceholderTarget
-                                    id={`request-end:project:${project._id}`}
-                                    data={{
-                                      kind: "project",
-                                      workspaceId: workspace._id,
-                                      projectId: project._id,
-                                    }}
-                                  >
-                                    <RequestDropPlaceholder request={projectRequestPreview.request} />
-                                  </DropPlaceholderTarget>
-                                ) : null}
-                                <ReorderableList
-                                  items={foldersByProject[project._id] ?? []}
-                                getItemData={(folder) => ({
-                                  kind: "folder",
-                                  workspaceId: workspace._id,
-                                  projectId: project._id,
-                                  folderId: folder._id,
-                                })}
-                                renderItem={(folder) => {
-                                  const isExpandedFolder =
-                                    expandedFolders[folder._id] ?? true;
-                                  const isFolderDropTarget = isDropTarget("folder", folder._id);
-                                  const folderRequestPreview = getRequestDropPreview(
+                            ),
+                            renderChildren: (isDragging) =>
+                              (isExpandedProject ||
+                                Boolean(projectRequestPreview) ||
+                                Boolean(projectFolderPreview)) &&
+                              !isDragging ? (
+                                <div className="ml-2 space-y-0.5 pl-1.5">
+                                  {renderRequestList(
+                                    workspace._id,
                                     project._id,
-                                    folder._id,
-                                  );
-
-                                  return {
-                                    row: (dragHandle, isDragging) => (
-                                      <div className="space-y-0.5">
-                                        {projectFolderPreview?.beforeFolderId === folder._id ? (
-                                          <FolderDropPlaceholder folder={projectFolderPreview.folder} />
-                                        ) : null}
-                                        <div
-                                          className={cn(
-                                            "group relative rounded-md transition",
-                                            isDragging
-                                              ? "pointer-events-none border border-dashed border-accent/35 bg-white/[0.04] pr-2"
-                                              : isFolderDropTarget
-                                                ? cn("bg-accent/10 ring-1 ring-inset ring-accent/55", canManagePrivacy ? "pr-14" : "pr-7")
-                                                : cn(canManagePrivacy ? "pr-14" : "pr-7", "hover:bg-white/[0.03]"),
-                                          )}
-                                        >
-                                          <div className="flex items-center gap-0.5 px-1 py-0.5">
-                                            {dragHandle}
-                                            <button
-                                              className="rounded-md p-0.5 text-muted transition hover:bg-white/8 hover:text-foreground"
-                                              onClick={() =>
-                                                setExpandedFolders((state) => ({
-                                                  ...state,
-                                                  [folder._id]: !isExpandedFolder,
-                                                }))
-                                              }
-                                              type="button"
-                                              aria-label={
-                                                isExpandedFolder
-                                                  ? "Collapse folder"
-                                                  : "Expand folder"
-                                              }
-                                            >
-                                              {isExpandedFolder ? (
-                                                <ChevronDown className="h-3.5 w-3.5" />
-                                              ) : (
-                                                <ChevronRight className="h-3.5 w-3.5" />
-                                              )}
-                                            </button>
-                                            <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                                              <span className="shrink-0">
-                                                {isExpandedFolder ? (
-                                                  <Folder className="h-3.5 w-3.5 text-amber-300" />
-                                                ) : (
-                                                  <FolderClosed className="h-3.5 w-3.5 text-amber-300" />
-                                                )}
-                                              </span>
-                                              <span
-                                                className="min-w-0 flex-1 truncate text-[13px] leading-5 text-foreground"
-                                                title={folder.name}
-                                              >
-                                                {folder.name}
-                                              </span>
-
-                                            </div>
-                                          </div>
-                                          {!isDragging ? (
-                                            <ContextMenus
-                                              leadingAccessory={
-                                                canManagePrivacy ? (
-                                                  <PrivacyToggleButton
-                                                    isPrivate={folder.isPrivate}
-                                                    label="folder"
-                                                    onToggle={(isPrivate) =>
-                                                      onToggleFolderPrivacy(workspace._id, folder._id, isPrivate)
-                                                    }
-                                                  />
-                                                ) : null
-                                              }
-                                              onCreate={() =>
-                                                onCreateRequest(project._id, folder._id)
-                                              }
-                                              onRename={() => onRenameFolder(folder._id)}
-                                              onDuplicate={() =>
-                                                onDuplicateFolder(folder._id)
-                                              }
-                                              onDelete={() => onDeleteFolder(folder._id)}
-                                            />
-                                          ) : null}
-                                        </div>
-                                      </div>
-                                    ),
-                                    renderChildren: (isDragging) =>
-                                      (isExpandedFolder || Boolean(folderRequestPreview)) && !isDragging ? (
-                                        <div className="ml-2 space-y-0.5 pl-1.5">
-                                          {folder.requests.length > 0 ? (
-                                            <ReorderableList
-                                              items={sortByOrder(folder.requests)}
-                                              getItemData={(request) => ({
-                                                kind: "request",
-                                                workspaceId: workspace._id,
-                                                projectId: project._id,
-                                                folderId: folder._id,
-                                                requestId: request._id,
-                                              })}
-                                              renderItem={(request) => ({
-                                                row: (dragHandle, isDragging) => (
-                                                  <div className="space-y-0.5">
-                                                    {folderRequestPreview?.beforeRequestId === request._id ? (
-                                                      <RequestDropPlaceholder
-                                                        request={folderRequestPreview.request}
-                                                      />
-                                                    ) : null}
-                                                    <div className="flex items-center gap-0.5">
-                                                      {dragHandle}
-                                                      <div className="min-w-0 flex-1">
-                                                        <RequestItem
-                                                          request={request}
-                                                          activeRequestId={activeRequestId}
-                                                          onSelectRequest={onSelectRequest}
-                                                          onRenameRequest={onRenameRequest}
-                                                          onDuplicateRequest={onDuplicateRequest}
-                                                          onDeleteRequest={onDeleteRequest}
-                                                         onTogglePrivacy={(requestId, isPrivate) =>
-                                                           onToggleRequestPrivacy(workspace._id, requestId, isPrivate)
-                                                         }
-                                                         canManagePrivacy={canManagePrivacy}
-                                                          isDragging={isDragging}
-                                                          isDropTarget={isDropTarget("request", request._id)}
-                                                        />
-                                                      </div>
-                                                    </div>
-                                                  </div>
-                                                ),
-                                              })}
-                                            />
-                                          ) : null}
-                                          {folderRequestPreview && !folderRequestPreview.beforeRequestId ? (
-                                            <DropPlaceholderTarget
-                                              id={`request-end:folder:${folder._id}`}
-                                              data={{
-                                                kind: "folder",
-                                                workspaceId: workspace._id,
-                                                projectId: project._id,
-                                                folderId: folder._id,
-                                              }}
-                                            >
-                                              <RequestDropPlaceholder request={folderRequestPreview.request} />
-                                            </DropPlaceholderTarget>
-                                          ) : null}
-                                        </div>
-                                      ) : null,
-                                  };
-                                }}
-                              />
-                              {projectFolderPreview && !projectFolderPreview.beforeFolderId ? (
-                                <DropPlaceholderTarget
-                                  id={`folder-end:project:${project._id}`}
-                                  data={{
-                                    kind: "project",
-                                    workspaceId: workspace._id,
-                                    projectId: project._id,
-                                  }}
-                                >
-                                  <FolderDropPlaceholder folder={projectFolderPreview.folder} />
-                                </DropPlaceholderTarget>
-                              ) : null}
-                              <Button
-                                variant="ghost"
-                                className="h-6 w-full justify-start rounded-md px-1.5 text-[12px] text-muted hover:bg-white/[0.04] hover:text-foreground"
-                                onClick={() => onCreateFolder(project._id)}
-                              >
-                                <Plus className="h-3 w-3" />
-                                Add folder
-                              </Button>
-                            </div>
-                          ) : null,
-                        };
-                      }}
-                    />
-                    {workspaceProjectPreview && !workspaceProjectPreview.beforeProjectId ? (
-                      <DropPlaceholderTarget
-                        id={`project-end:workspace:${workspace._id}`}
-                        data={{ kind: "workspace", workspaceId: workspace._id }}
-                      >
-                        <ProjectDropPlaceholder project={workspaceProjectPreview.project} />
-                      </DropPlaceholderTarget>
-                    ) : null}
-                  </div>
-                ) : null,
+                                    project.requests,
+                                    null,
+                                  )}
+                                  {renderFolderList(
+                                    workspace._id,
+                                    project._id,
+                                    project.folders,
+                                    null,
+                                  )}
+                                  {projectFolderPreview && !projectFolderPreview.beforeFolderId ? (
+                                    <DropPlaceholderTarget
+                                      id={`folder-end:project:${project._id}`}
+                                      data={{
+                                        kind: "project",
+                                        workspaceId: workspace._id,
+                                        projectId: project._id,
+                                      }}
+                                    >
+                                      <FolderDropPlaceholder folder={projectFolderPreview.folder} />
+                                    </DropPlaceholderTarget>
+                                  ) : null}
+                                  <Button
+                                    variant="ghost"
+                                    className="h-6 w-full justify-start rounded-md px-1.5 text-[12px] text-muted hover:bg-white/[0.04] hover:text-foreground"
+                                    onClick={() => onCreateFolder(project._id)}
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                    Add folder
+                                  </Button>
+                                </div>
+                              ) : null,
+                          };
+                        }}
+                      />
+                      {workspaceProjectPreview && !workspaceProjectPreview.beforeProjectId ? (
+                        <DropPlaceholderTarget
+                          id={`project-end:workspace:${workspace._id}`}
+                          data={{ kind: "workspace", workspaceId: workspace._id }}
+                        >
+                          <ProjectDropPlaceholder project={workspaceProjectPreview.project} />
+                        </DropPlaceholderTarget>
+                      ) : null}
+                    </div>
+                  ) : null,
               };
             }}
           />
@@ -1609,4 +1811,3 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     </Card>
   );
 }
-

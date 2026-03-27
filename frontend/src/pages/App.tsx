@@ -17,6 +17,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import { api } from "../lib/http-client";
 import { METHOD_TEXT_STYLES } from "../lib/methods";
 import { createEmptyRequest } from "../lib/request-helpers";
+import {
+  findFolderInProject,
+  findFolderInTree,
+  findRequestInTree,
+  getFirstProjectRequestId,
+} from "../lib/workspace-tree";
 import type { InspectorTab } from "../types";
 import { useActiveRequestStore } from "../store/activeRequest";
 import { showErrorToast, showSuccessToast } from "../store/toasts";
@@ -64,7 +70,9 @@ type CreateDialogState =
       kind: "folder";
       workspaceId: string;
       projectId: string;
+      parentFolderId?: string | null;
       projectName?: string;
+      folderName?: string;
     }
   | {
       kind: "request";
@@ -192,11 +200,9 @@ export default function App() {
     if (!activeProject || !activeRequestId) {
       return undefined;
     }
-    return [
-      ...activeProject.requests,
-      ...activeProject.folders.flatMap((folder) => folder.requests),
-    ].find((request) => request._id === activeRequestId);
-  }, [activeProject, activeRequestId]);
+
+    return findRequestInTree(activeTree, activeRequestId)?.request;
+  }, [activeProject, activeRequestId, activeTree]);
   const activeHistory = activeProject
     ? historyByProject[activeProject._id] ?? []
     : [];
@@ -207,40 +213,11 @@ export default function App() {
   const findProjectInTree = (workspaceId: string, projectId: string) =>
     trees[workspaceId]?.projects.find((project) => project._id === projectId);
 
-  const findFolderInTree = (workspaceId: string, folderId: string) => {
-    const project = trees[workspaceId]?.projects.find((item) =>
-      item.folders.some((folder) => folder._id === folderId),
-    );
-    const folder = project?.folders.find((item) => item._id === folderId);
+  const findFolderTarget = (workspaceId: string, folderId: string) =>
+    findFolderInTree(trees[workspaceId], folderId);
 
-    if (!project || !folder) {
-      return null;
-    }
-
-    return { project, folder };
-  };
-
-  const findRequestInTree = (workspaceId: string, requestId: string) => {
-    const project = trees[workspaceId]?.projects.find(
-      (item) =>
-        item.requests.some((request) => request._id === requestId) ||
-        item.folders.some((folder) =>
-          folder.requests.some((request) => request._id === requestId),
-        ),
-    );
-    const request = project
-      ? [
-          ...project.requests,
-          ...project.folders.flatMap((folder) => folder.requests),
-        ].find((item) => item._id === requestId)
-      : undefined;
-
-    if (!project || !request) {
-      return null;
-    }
-
-    return { project, request };
-  };
+  const findRequestTarget = (workspaceId: string, requestId: string) =>
+    findRequestInTree(trees[workspaceId], requestId);
 
   useEffect(() => {
     initialize().catch(reportError);
@@ -321,14 +298,12 @@ export default function App() {
   const handleSelectProject = (projectId: string) => {
     selectProject(projectId);
     const project = activeTree?.projects.find((item) => item._id === projectId);
-    const firstRequest =
-      project?.requests[0]?._id ?? project?.folders[0]?.requests[0]?._id;
-    selectRequest(firstRequest);
+    selectRequest(getFirstProjectRequestId(project));
   };
 
   const handleSelectRequest = (requestId: string) => {
     if (activeWorkspaceId) {
-      const match = findRequestInTree(activeWorkspaceId, requestId);
+      const match = findRequestTarget(activeWorkspaceId, requestId);
       if (match && match.project._id !== activeProjectId) {
         selectProject(match.project._id);
       }
@@ -366,7 +341,10 @@ export default function App() {
     });
   };
 
-  const openCreateFolderDialog = (projectId: string) => {
+  const openCreateFolderDialog = (
+    projectId: string,
+    parentFolderId?: string | null,
+  ) => {
     if (!activeWorkspace || !activeTree) {
       reportError(new Error("Open a workspace before creating a folder."));
       return;
@@ -378,12 +356,22 @@ export default function App() {
       return;
     }
 
+    const parentFolder = parentFolderId
+      ? findFolderInProject(project, parentFolderId)
+      : undefined;
+    if (parentFolderId && !parentFolder) {
+      reportError(new Error("Folder not found."));
+      return;
+    }
+
     setRenameDialog(null);
     setCreateDialog({
       kind: "folder",
       workspaceId: activeWorkspace._id,
       projectId,
+      parentFolderId: parentFolderId ?? null,
       projectName: project.name,
+      folderName: parentFolder?.name,
     });
   };
 
@@ -403,7 +391,7 @@ export default function App() {
     }
 
     const folder = folderId
-      ? project.folders.find((item) => item._id === folderId)
+      ? findFolderInProject(project, folderId)
       : undefined;
     if (folderId && !folder) {
       reportError(new Error("Folder not found."));
@@ -463,7 +451,7 @@ export default function App() {
       return;
     }
 
-    const target = findFolderInTree(activeWorkspace._id, folderId);
+    const target = findFolderTarget(activeWorkspace._id, folderId);
     if (!target) {
       reportError(new Error("Folder not found."));
       return;
@@ -485,7 +473,7 @@ export default function App() {
       return;
     }
 
-    const target = findRequestInTree(activeWorkspace._id, requestId);
+    const target = findRequestTarget(activeWorkspace._id, requestId);
     if (!target) {
       reportError(new Error("Request not found."));
       return;
@@ -539,6 +527,7 @@ export default function App() {
         createDialog.workspaceId,
         createDialog.projectId,
         name,
+        createDialog.parentFolderId,
       );
       selectWorkspace(createDialog.workspaceId);
       selectProject(createDialog.projectId);
@@ -644,7 +633,7 @@ export default function App() {
     folderId: string,
     isPrivate: boolean,
   ) => {
-    const target = findFolderInTree(workspaceId, folderId);
+    const target = findFolderTarget(workspaceId, folderId);
     if (!target) {
       throw new Error("Folder not found.");
     }
@@ -663,7 +652,7 @@ export default function App() {
     requestId: string,
     isPrivate: boolean,
   ) => {
-    const target = findRequestInTree(workspaceId, requestId);
+    const target = findRequestTarget(workspaceId, requestId);
     if (!target) {
       throw new Error("Request not found.");
     }
@@ -697,6 +686,7 @@ export default function App() {
     }
 
     const requestDraft = createEmptyRequest(project, folderId);
+    const targetFolder = folderId ? findFolderInProject(project, folderId) : undefined;
     const { request } = await api.createRequest({
       workspaceId: requestDraft.workspaceId,
       projectId: requestDraft.projectId,
@@ -709,10 +699,7 @@ export default function App() {
       body: requestDraft.body,
       auth: requestDraft.auth,
       isPrivate: requestDraft.isPrivate,
-      order: [
-        ...project.requests,
-        ...project.folders.flatMap((folder) => folder.requests),
-      ].length,
+      order: targetFolder ? targetFolder.requests.length : project.requests.length,
     });
 
     selectWorkspace(workspaceId);
@@ -773,27 +760,27 @@ export default function App() {
       .trees[targetWorkspaceId]?.projects.find((item) => item._id === project._id);
 
     selectProject(project._id);
-    selectRequest(
-      movedProject?.requests[0]?._id ??
-        movedProject?.folders[0]?.requests[0]?._id,
-    );
+    selectRequest(getFirstProjectRequestId(movedProject));
   };
 
   const handleMoveFolder = async ({
     folderId,
     workspaceId,
     targetProjectId,
+    targetParentFolderId,
     targetOrder,
   }: {
     folderId: string;
     workspaceId: string;
     targetProjectId: string;
+    targetParentFolderId?: string | null;
     targetOrder: number;
   }) => {
     const preservedRequestId = activeRequestId;
     const { folder } = await api.moveFolder(folderId, {
       workspaceId,
       targetProjectId,
+      targetParentFolderId,
       targetOrder,
     });
 
@@ -803,12 +790,13 @@ export default function App() {
     const targetProject = useWorkspaceStore
       .getState()
       .trees[workspaceId]?.projects.find((item) => item._id === targetProjectId);
-    const movedFolder = targetProject?.folders.find((item) => item._id === folder._id);
+    const movedFolder = targetProject
+      ? findFolderInProject(targetProject, folder._id)
+      : undefined;
     const nextRequestId =
       movedFolder?.requests.find((item) => item._id === preservedRequestId)?._id ??
       movedFolder?.requests[0]?._id ??
-      targetProject?.requests[0]?._id ??
-      targetProject?.folders[0]?.requests[0]?._id;
+      getFirstProjectRequestId(targetProject);
 
     selectProject(targetProjectId);
     selectRequest(nextRequestId);
@@ -927,9 +915,11 @@ export default function App() {
     if (createDialog.kind === "folder") {
       return {
         title: "Create Folder",
-        description: createDialog.projectName
-          ? `Group requests inside ${createDialog.projectName}.`
-          : "Create a folder inside the selected project.",
+        description: createDialog.folderName
+          ? `Create a nested folder inside ${createDialog.folderName}.`
+          : createDialog.projectName
+            ? `Group requests inside ${createDialog.projectName}.`
+            : "Create a folder inside the selected project.",
         label: "Folder",
         placeholder: "Folder name",
         submitLabel: "Create Folder",
@@ -1299,3 +1289,4 @@ export default function App() {
     </>
   );
 }
+

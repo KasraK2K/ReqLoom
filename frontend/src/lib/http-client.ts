@@ -130,10 +130,15 @@ export const api = {
       `/projects/${projectId}?workspaceId=${workspaceId}`,
       { method: "DELETE" },
     ),
-  createFolder: (workspaceId: string, projectId: string, name: string) =>
+  createFolder: (
+    workspaceId: string,
+    projectId: string,
+    name: string,
+    parentFolderId?: string | null,
+  ) =>
     requestJson<{ folder: FolderDoc }>("/folders", {
       method: "POST",
-      body: JSON.stringify({ workspaceId, projectId, name }),
+      body: JSON.stringify({ workspaceId, projectId, parentFolderId, name }),
     }),
   updateFolder: (
     folderId: string,
@@ -153,16 +158,18 @@ export const api = {
     workspaceId: string,
     projectId: string,
     orderedIds: string[],
+    parentFolderId?: string | null,
   ) =>
     requestJson<{ success: boolean }>("/folders/reorder", {
       method: "POST",
-      body: JSON.stringify({ workspaceId, projectId, orderedIds }),
+      body: JSON.stringify({ workspaceId, projectId, parentFolderId, orderedIds }),
     }),
   moveFolder: (
     folderId: string,
     payload: {
       workspaceId: string;
       targetProjectId: string;
+      targetParentFolderId?: string | null;
       targetOrder?: number;
     },
   ) =>

@@ -80,6 +80,7 @@ export interface FolderDoc extends Timestamped {
   entityType: "folder";
   workspaceId: string;
   projectId: string;
+  parentFolderId?: string | null;
   name: string;
   order: number;
   isPrivate: boolean;
@@ -175,18 +176,19 @@ export interface HistoryDoc extends Timestamped {
   requestSnapshot?: HistoryRequestSnapshot;
 }
 
+export interface FolderTree extends FolderDoc {
+  folders: FolderTree[];
+  requests: RequestDoc[];
+}
+
+export interface ProjectTree extends ProjectDoc {
+  folders: FolderTree[];
+  requests: RequestDoc[];
+}
+
 export interface WorkspaceTree {
   workspace: WorkspaceMeta;
-  projects: Array<
-    ProjectDoc & {
-      folders: Array<
-        FolderDoc & {
-          requests: RequestDoc[];
-        }
-      >;
-      requests: RequestDoc[];
-    }
-  >;
+  projects: ProjectTree[];
 }
 
 export interface BootstrapStatusResponse {

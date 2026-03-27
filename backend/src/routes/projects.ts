@@ -376,6 +376,10 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
           cloned.projectId =
             idMap.get(cloned.projectId as string) ?? cloned.projectId;
         }
+        if (typeof cloned.parentFolderId === "string") {
+          cloned.parentFolderId =
+            idMap.get(cloned.parentFolderId as string) ?? cloned.parentFolderId;
+        }
         if (typeof cloned.folderId === "string") {
           cloned.folderId =
             idMap.get(cloned.folderId as string) ?? cloned.folderId;

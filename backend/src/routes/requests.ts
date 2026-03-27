@@ -51,6 +51,7 @@ function normalizeProject(project: ProjectDoc): ProjectDoc {
 function normalizeFolder(folder: FolderDoc): FolderDoc {
   return {
     ...folder,
+    parentFolderId: folder.parentFolderId ?? null,
     isPrivate: Boolean(folder.isPrivate),
   };
 }
@@ -88,9 +89,20 @@ async function requireFolder(
   workspaceId: string,
   folderId: string,
   user?: SessionUser,
+  visitedFolderIds = new Set<string>(),
 ): Promise<FolderDoc> {
+  const normalizedFolderId = folderId?.trim();
+  if (!normalizedFolderId) {
+    throw app.httpErrors.badRequest("Folder ID is required");
+  }
+
+  if (visitedFolderIds.has(normalizedFolderId)) {
+    throw app.httpErrors.notFound("Folder not found");
+  }
+  visitedFolderIds.add(normalizedFolderId);
+
   const folder = await workspaceDataCollection(app.mongo, workspaceId).findOne({
-    _id: toObjectId(folderId),
+    _id: toObjectId(normalizedFolderId),
     entityType: "folder",
   });
   if (!folder) {
@@ -100,6 +112,19 @@ async function requireFolder(
   const normalizedFolder = normalizeFolder(serializeDoc(folder) as FolderDoc);
   if (user && !canViewEntity(user, normalizedFolder)) {
     throw app.httpErrors.notFound("Folder not found");
+  }
+
+  if (user && normalizedFolder.parentFolderId) {
+    const parentFolder = await requireFolder(
+      app,
+      workspaceId,
+      normalizedFolder.parentFolderId,
+      user,
+      visitedFolderIds,
+    );
+    if (parentFolder.projectId !== normalizedFolder.projectId) {
+      throw app.httpErrors.notFound("Folder not found");
+    }
   }
 
   return normalizedFolder;
@@ -140,6 +165,71 @@ function normalizeFolderId(folderId?: string | null) {
 
 function clampOrder(value: number | undefined, max: number) {
   return Math.max(0, Math.min(value ?? max, max));
+}
+
+async function listProjectFolders(
+  app: Parameters<FastifyPluginAsync>[0],
+  workspaceId: string,
+  projectId: string,
+): Promise<FolderDoc[]> {
+  return (serializeDocs(
+    await workspaceDataCollection(app.mongo, workspaceId)
+      .find({ entityType: "folder", projectId })
+      .sort({ order: 1, createdAt: 1 })
+      .toArray(),
+  ) as FolderDoc[]).map(normalizeFolder);
+}
+
+function collectFolderSubtreeIds(folders: FolderDoc[], rootFolderId: string): string[] {
+  const childrenByParent = new Map<string | null, FolderDoc[]>();
+  folders.forEach((folder) => {
+    const parentFolderId = normalizeFolderId(folder.parentFolderId);
+    const bucket = childrenByParent.get(parentFolderId) ?? [];
+    bucket.push(folder);
+    childrenByParent.set(parentFolderId, bucket);
+  });
+
+  const collectedIds: string[] = [];
+  const stack = [rootFolderId];
+
+  while (stack.length > 0) {
+    const currentFolderId = stack.pop()!;
+    collectedIds.push(currentFolderId);
+    const children = childrenByParent.get(currentFolderId) ?? [];
+    children.forEach((childFolder) => stack.push(childFolder._id));
+  }
+
+  return collectedIds;
+}
+
+function getSiblingFolders(
+  folders: FolderDoc[],
+  projectId: string,
+  parentFolderId: string | null,
+) {
+  return sortByOrder(
+    folders.filter(
+      (folder) =>
+        folder.projectId === projectId &&
+        normalizeFolderId(folder.parentFolderId) === parentFolderId,
+    ),
+  );
+}
+
+async function listRequestsInFolders(
+  app: Parameters<FastifyPluginAsync>[0],
+  workspaceId: string,
+  folderIds: string[],
+): Promise<RequestDoc[]> {
+  if (folderIds.length === 0) {
+    return [];
+  }
+
+  return (serializeDocs(
+    await workspaceDataCollection(app.mongo, workspaceId)
+      .find({ entityType: "request", folderId: { $in: folderIds } })
+      .toArray(),
+  ) as RequestDoc[]).map(normalizeRequest);
 }
 
 async function trimHistory(
@@ -204,12 +294,24 @@ function buildHistoryRequestSnapshot(
 }
 
 const requestRoutes: FastifyPluginAsync = async (app) => {
-  app.post<{ Body: { workspaceId: string; projectId: string; name: string } }>(
+  app.post<{
+    Body: {
+      workspaceId: string;
+      projectId: string;
+      parentFolderId?: string | null;
+      name: string;
+    };
+  }>(
     "/folders",
     { preHandler: app.authenticate },
     async (request) => {
       const workspace = await requireWorkspace(app, request.body.workspaceId);
       const user = getRequiredUser(request);
+      const name = request.body.name?.trim();
+      if (!name) {
+        throw app.httpErrors.badRequest("Folder name is required");
+      }
+
       if (!canAccessWorkspace(user, workspace)) {
         throw app.httpErrors.forbidden(
           "You do not have access to this workspace",
@@ -222,11 +324,30 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
         request.body.projectId,
         user,
       );
+      const parentFolderId = normalizeFolderId(request.body.parentFolderId);
+
+      if (parentFolderId) {
+        const parentFolder = await requireFolder(
+          app,
+          workspace._id,
+          parentFolderId,
+          user,
+        );
+        if (parentFolder.projectId !== project._id) {
+          throw app.httpErrors.badRequest(
+            "Parent folder does not belong to the selected project",
+          );
+        }
+      }
 
       await app.assertProjectUnlocked(request, project, workspace);
 
       const maxOrder = await workspaceDataCollection(app.mongo, workspace._id)
-        .find({ entityType: "folder", projectId: project._id })
+        .find({
+          entityType: "folder",
+          projectId: project._id,
+          parentFolderId,
+        })
         .sort({ order: -1 })
         .limit(1)
         .toArray();
@@ -237,7 +358,8 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
         entityType: "folder",
         workspaceId: workspace._id,
         projectId: project._id,
-        name: request.body.name.trim(),
+        parentFolderId,
+        name,
         order:
           ((maxOrder[0] as { order?: number } | undefined)?.order ?? -1) + 1,
         isPrivate: false,
@@ -344,32 +466,53 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
 
       await app.assertProjectUnlocked(request, project, workspace);
 
-      const requestDocs = await workspaceDataCollection(
-        app.mongo,
+      const projectFolders = await listProjectFolders(app, workspace._id, folder.projectId);
+      const subtreeFolderIds = collectFolderSubtreeIds(projectFolders, folder._id);
+      const subtreeFolderIdSet = new Set(subtreeFolderIds);
+      const subtreeFolders = projectFolders.filter((item) => subtreeFolderIdSet.has(item._id));
+      const requestDocs = await listRequestsInFolders(
+        app,
         workspace._id,
-      )
-        .find({ entityType: "request", folderId: folder._id })
-        .toArray();
-      const newFolderId = createId();
+        subtreeFolderIds,
+      );
+      const siblingFolders = getSiblingFolders(
+        projectFolders,
+        folder.projectId,
+        normalizeFolderId(folder.parentFolderId),
+      );
       const now = isoNow();
+      const idMap = new Map<string, string>();
+      subtreeFolders.forEach((item) => idMap.set(item._id, createId().toHexString()));
 
-      await workspaceDataCollection(app.mongo, workspace._id).insertOne({
-        _id: newFolderId,
-        entityType: "folder",
-        workspaceId: workspace._id,
-        projectId: folder.projectId,
-        name: `${folder.name} Copy`,
-        order: requestDocs.length,
-        isPrivate: Boolean(folder.isPrivate),
+      const duplicatedFolders = subtreeFolders.map((item) => ({
+        ...item,
+        _id: toObjectId(idMap.get(item._id)!),
+        parentFolderId: item.parentFolderId
+          ? idMap.get(item.parentFolderId) ?? item.parentFolderId
+          : null,
+        name: item._id === folder._id ? `${item.name} Copy` : item.name,
+        order:
+          item._id === folder._id
+            ? siblingFolders.length
+            : item.order,
         createdAt: now,
         updatedAt: now,
-      } as never);
+      }));
+
+      if (duplicatedFolders.length > 0) {
+        await workspaceDataCollection(app.mongo, workspace._id).insertMany(
+          duplicatedFolders as never[],
+        );
+      }
 
       if (requestDocs.length > 0) {
         const clonedRequests = requestDocs.map((requestDoc) => ({
           ...requestDoc,
           _id: createId(),
-          folderId: newFolderId.toHexString(),
+          folderId: requestDoc.folderId
+            ? idMap.get(requestDoc.folderId) ?? requestDoc.folderId
+            : null,
+          responseHistory: [],
           createdAt: now,
           updatedAt: now,
         }));
@@ -382,14 +525,19 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
         folder: await requireFolder(
           app,
           workspace._id,
-          newFolderId.toHexString(),
+          idMap.get(folder._id)!,
           user,
         ),
       };
     },
   );
   app.post<{
-    Body: { workspaceId: string; projectId: string; orderedIds: string[] };
+    Body: {
+      workspaceId: string;
+      projectId: string;
+      parentFolderId?: string | null;
+      orderedIds: string[];
+    };
   }>("/folders/reorder", { preHandler: app.authenticate }, async (request) => {
     const workspace = await requireWorkspace(app, request.body.workspaceId);
     const user = getRequiredUser(request);
@@ -405,13 +553,28 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
       request.body.projectId,
       user,
     );
+    const parentFolderId = normalizeFolderId(request.body.parentFolderId);
+
+    if (parentFolderId) {
+      const parentFolder = await requireFolder(
+        app,
+        workspace._id,
+        parentFolderId,
+        user,
+      );
+      if (parentFolder.projectId !== project._id) {
+        throw app.httpErrors.badRequest(
+          "Parent folder does not belong to the selected project",
+        );
+      }
+    }
 
     await app.assertProjectUnlocked(request, project, workspace);
     await Promise.all(
       request.body.orderedIds.map((folderId, index) =>
         workspaceDataCollection(app.mongo, workspace._id).updateOne(
           { _id: toObjectId(folderId), entityType: "folder" },
-          { $set: { order: index, updatedAt: isoNow() } },
+          { $set: { order: index, parentFolderId, updatedAt: isoNow() } },
         ),
       ),
     );
@@ -419,7 +582,12 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
   });
   app.post<{
     Params: { folderId: string };
-    Body: { workspaceId: string; targetProjectId: string; targetOrder?: number };
+    Body: {
+      workspaceId: string;
+      targetProjectId: string;
+      targetParentFolderId?: string | null;
+      targetOrder?: number;
+    };
   }>(
     "/folders/:folderId/move",
     { preHandler: app.authenticate },
@@ -454,28 +622,65 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
       await app.assertProjectUnlocked(request, sourceProject, workspace);
       await app.assertProjectUnlocked(request, targetProject, workspace);
 
-      const collection = workspaceDataCollection(app.mongo, workspace._id);
-      const now = isoNow();
-      const sourceFolders = serializeDocs(
-        await collection
-          .find({ entityType: "folder", projectId: sourceProject._id })
-          .sort({ order: 1, createdAt: 1 })
-          .toArray(),
-      ) as FolderDoc[];
-      const sourceFolderIds = sourceFolders.map((item) => item._id);
-      const sourceIndex = sourceFolderIds.indexOf(folder._id);
-
-      if (sourceIndex === -1) {
-        throw app.httpErrors.notFound("Folder not found in source project");
+      const targetParentFolderId = normalizeFolderId(request.body.targetParentFolderId);
+      if (targetParentFolderId) {
+        const targetParentFolder = await requireFolder(
+          app,
+          workspace._id,
+          targetParentFolderId,
+          user,
+        );
+        if (targetParentFolder.projectId !== targetProject._id) {
+          throw app.httpErrors.badRequest(
+            "Target parent folder does not belong to the target project",
+          );
+        }
       }
 
-      if (sourceProject._id === targetProject._id) {
-        const orderedIds = sourceFolderIds.filter((folderId) => folderId !== folder._id);
-        const targetOrder = clampOrder(request.body.targetOrder, orderedIds.length);
+      const collection = workspaceDataCollection(app.mongo, workspace._id);
+      const now = isoNow();
+      const relevantProjectIds = Array.from(
+        new Set([sourceProject._id, targetProject._id]),
+      );
+      const relevantFolders = (serializeDocs(
+        await collection
+          .find({ entityType: "folder", projectId: { $in: relevantProjectIds } })
+          .sort({ order: 1, createdAt: 1 })
+          .toArray(),
+      ) as FolderDoc[]).map(normalizeFolder);
+      const sourceProjectFolders = relevantFolders.filter(
+        (item) => item.projectId === sourceProject._id,
+      );
+      const movedSubtreeIds = collectFolderSubtreeIds(sourceProjectFolders, folder._id);
+      const movedSubtreeIdSet = new Set(movedSubtreeIds);
+      if (targetParentFolderId && movedSubtreeIdSet.has(targetParentFolderId)) {
+        throw app.httpErrors.badRequest(
+          "A folder cannot be moved inside itself or one of its descendants",
+        );
+      }
 
+      const sourceParentFolderId = normalizeFolderId(folder.parentFolderId);
+      const sourceSiblings = getSiblingFolders(
+        relevantFolders,
+        sourceProject._id,
+        sourceParentFolderId,
+      );
+      const sourceIndex = sourceSiblings.findIndex((item) => item._id === folder._id);
+      if (sourceIndex === -1) {
+        throw app.httpErrors.notFound("Folder not found in source container");
+      }
+
+      const isSameContainer =
+        sourceProject._id === targetProject._id &&
+        sourceParentFolderId === targetParentFolderId;
+
+      if (isSameContainer) {
+        const orderedIds = sourceSiblings.map((item) => item._id);
+        orderedIds.splice(sourceIndex, 1);
+        const targetOrder = clampOrder(request.body.targetOrder, orderedIds.length);
         orderedIds.splice(targetOrder, 0, folder._id);
 
-        if (targetOrder !== sourceIndex) {
+        if (sourceIndex !== targetOrder) {
           await Promise.all(
             orderedIds.map((folderId, index) =>
               collection.updateOne(
@@ -491,19 +696,18 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
         };
       }
 
-      const targetFolders = serializeDocs(
-        await collection
-          .find({ entityType: "folder", projectId: targetProject._id })
-          .sort({ order: 1, createdAt: 1 })
-          .toArray(),
-      ) as FolderDoc[];
-      const sourceRemainingIds = sourceFolderIds.filter((folderId) => folderId !== folder._id);
-      const targetOrderedIds = targetFolders
-        .map((item) => item._id)
-        .filter((folderId) => folderId !== folder._id);
+      const targetSiblings = getSiblingFolders(
+        relevantFolders,
+        targetProject._id,
+        targetParentFolderId,
+      ).filter((item) => item._id !== folder._id);
+      const targetOrderedIds = targetSiblings.map((item) => item._id);
       const targetOrder = clampOrder(request.body.targetOrder, targetOrderedIds.length);
-
       targetOrderedIds.splice(targetOrder, 0, folder._id);
+
+      const sourceRemainingIds = sourceSiblings
+        .filter((item) => item._id !== folder._id)
+        .map((item) => item._id);
 
       await Promise.all(
         sourceRemainingIds.map((folderId, index) =>
@@ -519,20 +723,51 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
           collection.updateOne(
             { _id: toObjectId(folderId), entityType: "folder" },
             {
-              $set: {
-                order: index,
-                updatedAt: now,
-                ...(folderId === folder._id ? { projectId: targetProject._id } : {}),
-              },
+              $set:
+                folderId === folder._id
+                  ? {
+                      projectId: targetProject._id,
+                      parentFolderId: targetParentFolderId,
+                      order: index,
+                      updatedAt: now,
+                    }
+                  : { order: index, updatedAt: now },
             },
           ),
         ),
       );
 
-      await collection.updateMany(
-        { entityType: "request", folderId: folder._id },
-        { $set: { projectId: targetProject._id, updatedAt: now } },
-      );
+      if (sourceProject._id !== targetProject._id) {
+        const descendantFolderIds = movedSubtreeIds.filter((folderId) => folderId !== folder._id);
+        if (descendantFolderIds.length > 0) {
+          await collection.updateMany(
+            {
+              _id: { $in: descendantFolderIds.map((folderId) => toObjectId(folderId)) },
+              entityType: "folder",
+            },
+            { $set: { projectId: targetProject._id, updatedAt: now } },
+          );
+        }
+
+        const movedRequests = await listRequestsInFolders(
+          app,
+          workspace._id,
+          movedSubtreeIds,
+        );
+        if (movedRequests.length > 0) {
+          await collection.updateMany(
+            { entityType: "request", folderId: { $in: movedSubtreeIds } },
+            { $set: { projectId: targetProject._id, updatedAt: now } },
+          );
+          await collection.updateMany(
+            {
+              entityType: "history",
+              requestId: { $in: movedRequests.map((item) => item._id) },
+            },
+            { $set: { projectId: targetProject._id, updatedAt: now } },
+          );
+        }
+      }
 
       return {
         folder: await requireFolder(app, workspace._id, folder._id, user),
@@ -566,10 +801,18 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
         folder.projectId,
         user,
       );
+      const projectFolders = await listProjectFolders(app, workspace._id, folder.projectId);
+      const subtreeFolderIds = collectFolderSubtreeIds(projectFolders, folder._id);
 
       await app.assertProjectUnlocked(request, project, workspace);
       await workspaceDataCollection(app.mongo, workspace._id).deleteMany({
-        $or: [{ _id: toObjectId(folder._id) }, { folderId: folder._id }],
+        $or: [
+          {
+            _id: { $in: subtreeFolderIds.map((folderId) => toObjectId(folderId)) },
+            entityType: "folder",
+          },
+          { entityType: "request", folderId: { $in: subtreeFolderIds } },
+        ],
       });
       return { success: true };
     },

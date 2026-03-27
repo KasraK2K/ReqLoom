@@ -1,6 +1,7 @@
 import type {
   AdminUser,
   FolderDoc,
+  FolderTree,
   HistoryDoc,
   ProjectDoc,
   RequestDoc,
@@ -41,6 +42,7 @@ function normalizeProject<T extends ProjectDoc>(project: T): T {
 function normalizeFolder<T extends FolderDoc>(folder: T): T {
   return {
     ...folder,
+    parentFolderId: folder.parentFolderId ?? null,
     isPrivate: Boolean(folder.isPrivate),
   };
 }
@@ -50,6 +52,14 @@ function normalizeRequest<T extends RequestDoc>(request: T): T {
     ...request,
     isPrivate: Boolean(request.isPrivate),
   };
+}
+
+function sortByOrder<T extends { order: number }>(items: T[]): T[] {
+  return [...items].sort((a, b) => a.order - b.order);
+}
+
+function normalizeFolderId(folderId?: string | null) {
+  return folderId ?? null;
 }
 
 export async function hasAnyAdmins(db: Db): Promise<boolean> {
@@ -149,10 +159,37 @@ export async function buildWorkspaceTree(
 
   const visibleProjects = projects.filter((project) => canViewEntity(user, project));
   const visibleProjectIds = new Set(visibleProjects.map((project) => project._id));
-  const visibleFolders = folders.filter(
-    (folder) =>
-      visibleProjectIds.has(folder.projectId) && canViewEntity(user, folder),
-  );
+  const folderById = new Map(folders.map((folder) => [folder._id, folder]));
+  const folderVisibility = new Map<string, boolean>();
+  const isFolderVisible = (folder: FolderDoc): boolean => {
+    const cached = folderVisibility.get(folder._id);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    if (!visibleProjectIds.has(folder.projectId) || !canViewEntity(user, folder)) {
+      folderVisibility.set(folder._id, false);
+      return false;
+    }
+
+    const parentFolderId = normalizeFolderId(folder.parentFolderId);
+    if (!parentFolderId) {
+      folderVisibility.set(folder._id, true);
+      return true;
+    }
+
+    const parentFolder = folderById.get(parentFolderId);
+    if (!parentFolder || parentFolder.projectId !== folder.projectId) {
+      folderVisibility.set(folder._id, false);
+      return false;
+    }
+
+    const result = isFolderVisible(parentFolder);
+    folderVisibility.set(folder._id, result);
+    return result;
+  };
+
+  const visibleFolders = folders.filter((folder) => isFolderVisible(folder));
   const visibleFolderIds = new Set(visibleFolders.map((folder) => folder._id));
   const visibleRequests = requests.filter(
     (request) =>
@@ -162,28 +199,32 @@ export async function buildWorkspaceTree(
   );
 
   const projectTree = visibleProjects.map((project) => {
-    const projectFolders = visibleFolders
-      .filter((folder) => folder.projectId === project._id)
-      .sort((a, b) => a.order - b.order)
-      .map((folder) => ({
+    const projectFolders = visibleFolders.filter((folder) => folder.projectId === project._id);
+    const requestsByFolder = new Map<string | null, RequestDoc[]>();
+    visibleRequests
+      .filter((request) => request.projectId === project._id)
+      .forEach((request) => {
+        const key = normalizeFolderId(request.folderId);
+        const bucket = requestsByFolder.get(key) ?? [];
+        bucket.push(request);
+        requestsByFolder.set(key, bucket);
+      });
+
+    const buildFolders = (parentFolderId: string | null): FolderTree[] =>
+      sortByOrder(
+        projectFolders.filter(
+          (folder) => normalizeFolderId(folder.parentFolderId) === parentFolderId,
+        ),
+      ).map((folder) => ({
         ...folder,
-        requests: visibleRequests
-          .filter(
-            (request) =>
-              request.projectId === project._id &&
-              request.folderId === folder._id,
-          )
-          .sort((a, b) => a.order - b.order),
+        folders: buildFolders(folder._id),
+        requests: sortByOrder(requestsByFolder.get(folder._id) ?? []),
       }));
 
     return {
       ...project,
-      folders: projectFolders,
-      requests: visibleRequests
-        .filter(
-          (request) => request.projectId === project._id && !request.folderId,
-        )
-        .sort((a, b) => a.order - b.order),
+      folders: buildFolders(null),
+      requests: sortByOrder(requestsByFolder.get(null) ?? []),
     };
   });
 
@@ -192,3 +233,5 @@ export async function buildWorkspaceTree(
     projects: projectTree.sort((a, b) => a.order - b.order),
   };
 }
+
+
