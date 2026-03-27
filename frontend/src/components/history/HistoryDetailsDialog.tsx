@@ -27,7 +27,7 @@ function DetailSection({
   children,
 }: DetailSectionProps) {
   return (
-    <section className="space-y-3 rounded-2xl border border-white/8 bg-slate-950/40 p-4">
+    <section className="space-y-3 rounded-2xl border border-border/45 bg-[rgb(var(--surface-2)/0.58)] p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-foreground">{title}</h3>
@@ -90,18 +90,18 @@ function renderKeyValueList(
 ) {
   if (items.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-white/10 bg-slate-950/30 px-4 py-6 text-sm text-muted">
+      <div className="rounded-xl border border-dashed border-border/55 bg-[rgb(var(--surface-1)/0.58)] px-4 py-6 text-sm text-muted">
         {emptyLabel}
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-white/8 bg-slate-950/60">
+    <div className="overflow-hidden rounded-xl border border-border/45 bg-[rgb(var(--surface-1)/0.78)]">
       {items.map((item, index) => (
         <div
           key={`${item.key}-${item.value}-${item.meta ?? ""}-${index}`}
-          className="grid grid-cols-[minmax(96px,140px)_minmax(0,1fr)] gap-3 border-b border-white/8 px-4 py-3 last:border-b-0"
+          className="grid grid-cols-[minmax(96px,140px)_minmax(0,1fr)] gap-3 border-b border-border/40 px-4 py-3 last:border-b-0"
         >
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
             {item.key || "(empty)"}
@@ -141,7 +141,7 @@ function getBodyListItems(
           row.fileSizeBytes != null ? formatBytes(row.fileSizeBytes) : undefined,
         ]
           .filter(Boolean)
-          .join(" · "),
+          .join(" | "),
       };
     }
 
@@ -233,14 +233,14 @@ export function HistoryDetailsDialog({
       className="max-h-[85vh] max-w-4xl overflow-hidden"
     >
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="shrink-0 border-b border-white/8 px-5 py-4">
+        <div className="shrink-0 border-b border-border/45 px-5 py-4">
           <div className="flex flex-wrap items-center gap-2">
             <Badge className={METHOD_STYLES[entry.method]}>{entry.method}</Badge>
             <Badge>{entry.status}</Badge>
             <Badge>{entry.durationMs} ms</Badge>
             <Badge>{formatBytes(entry.sizeBytes)}</Badge>
           </div>
-          <div className="mt-3 rounded-xl border border-white/8 bg-slate-950/60 px-4 py-3 font-mono text-xs text-foreground break-all">
+          <div className="code-surface mt-3 rounded-xl border border-border/45 px-4 py-3 font-mono text-xs break-all">
             {entry.url}
           </div>
           <div className="mt-2 text-xs text-muted">
@@ -250,7 +250,7 @@ export function HistoryDetailsDialog({
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
           {!snapshot ? (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-slate-950/30 px-4 py-8 text-sm text-muted">
+            <div className="rounded-2xl border border-dashed border-border/55 bg-[rgb(var(--surface-1)/0.58)] px-4 py-8 text-sm text-muted">
               This history item was created before full request snapshots were stored. Run the request again to capture sent headers, auth, params, and body details.
             </div>
           ) : (
@@ -277,7 +277,7 @@ export function HistoryDetailsDialog({
                   <Badge>{formatAuthTypeLabel(snapshot.auth.type)}</Badge>
                 </div>
                 {snapshot.auth.type === "none" ? (
-                  <div className="rounded-xl border border-dashed border-white/10 bg-slate-950/30 px-4 py-6 text-sm text-muted">
+                  <div className="rounded-xl border border-dashed border-border/55 bg-[rgb(var(--surface-1)/0.58)] px-4 py-6 text-sm text-muted">
                     This request was sent without auth.
                   </div>
                 ) : null}
@@ -340,7 +340,7 @@ export function HistoryDetailsDialog({
                   <Badge>{formatBodyTypeLabel(snapshot.body.type)}</Badge>
                 </div>
                 {snapshot.body.type === "none" ? (
-                  <div className="rounded-xl border border-dashed border-white/10 bg-slate-950/30 px-4 py-6 text-sm text-muted">
+                  <div className="rounded-xl border border-dashed border-border/55 bg-[rgb(var(--surface-1)/0.58)] px-4 py-6 text-sm text-muted">
                     This request was sent without a body.
                   </div>
                 ) : null}
@@ -348,11 +348,11 @@ export function HistoryDetailsDialog({
                   <JSONTree
                     value={snapshot.body.content ?? ""}
                     scrollable={false}
-                    className="border border-white/8 text-xs"
+                    className="border border-border/45 text-xs"
                   />
                 ) : null}
                 {snapshot.body.type === "text" ? (
-                  <pre className="rounded-xl border border-white/8 bg-slate-950/70 p-4 font-mono text-xs text-foreground whitespace-pre-wrap break-all">
+                  <pre className="code-surface rounded-xl border border-border/45 p-4 font-mono text-xs whitespace-pre-wrap break-all">
                     {snapshot.body.content || "(empty)"}
                   </pre>
                 ) : null}

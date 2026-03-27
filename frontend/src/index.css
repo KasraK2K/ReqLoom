@@ -37,6 +37,16 @@
   --scrollbar-thumb-start-active: rgba(145, 211, 255, 0.62);
   --scrollbar-thumb-end-active: rgba(97, 176, 255, 0.45);
   --scrollbar-track-line: rgba(255, 255, 255, 0.05);
+  --json-key: rgb(var(--foreground) / 0.76);
+  --json-string: rgb(var(--foreground) / 0.96);
+  --json-number: rgb(var(--accent) / 0.9);
+  --json-null: rgb(var(--muted) / 0.95);
+  --json-punctuation: rgb(var(--muted) / 0.82);
+  --code-surface: linear-gradient(
+    180deg,
+    rgb(var(--surface-1) / 0.96),
+    rgb(var(--card) / 0.9)
+  );
   --danger-text: 254 205 211;
   --danger-hover-text: 255 228 230;
   --danger-hover-bg: rgba(244, 63, 94, 0.18);
@@ -159,6 +169,31 @@ textarea {
 .app-dropdown-item[data-danger="true"]:focus-visible {
   background: var(--danger-hover-bg);
   color: rgb(var(--danger-hover-text));
+}
+
+.code-surface {
+  background: var(--code-surface);
+  color: rgb(var(--foreground) / 0.92);
+}
+
+.json-punctuation {
+  color: var(--json-punctuation);
+}
+
+.json-token-key {
+  color: var(--json-key);
+}
+
+.json-token-string {
+  color: var(--json-string);
+}
+
+.json-token-number {
+  color: var(--json-number);
+}
+
+.json-token-null {
+  color: var(--json-null);
 }
 
 ::-webkit-scrollbar {
