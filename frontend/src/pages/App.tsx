@@ -10,6 +10,7 @@ import { AppShell } from "../components/layout/AppShell";
 import { RequestBuilder } from "../components/request-builder/RequestBuilder";
 import { ResponseViewer } from "../components/response-viewer/ResponseViewer";
 import { CreateEntityDialog } from "../components/sidebar/CreateEntityDialog";
+import { ImportPostmanDialog } from "../components/sidebar/ImportPostmanDialog";
 import { WorkspaceTree } from "../components/sidebar/WorkspaceTree";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -108,6 +109,10 @@ type RenameDialogState =
     }
   | null;
 
+type ImportDialogState =
+  | { workspaceId: string; workspaceName?: string }
+  | null;
+
 export default function App() {
   const {
     user,
@@ -149,6 +154,7 @@ export default function App() {
   const [users, setUsers] = useState<User[]>([]);
   const [createDialog, setCreateDialog] = useState<CreateDialogState>(null);
   const [renameDialog, setRenameDialog] = useState<RenameDialogState>(null);
+  const [importDialog, setImportDialog] = useState<ImportDialogState>(null);
   const [historyDetailsEntry, setHistoryDetailsEntry] = useState<HistoryDoc | null>(null);
   const sendAbortControllerRef = useRef<AbortController | null>(null);
   const canCreateWorkspace = user?.role !== "member";
@@ -412,6 +418,25 @@ export default function App() {
     });
   };
 
+  const openImportPostmanDialog = (workspaceId: string) => {
+    if (!canCreateProject) {
+      reportError(new Error("Members cannot import projects."));
+      return;
+    }
+
+    const workspace = workspaces.find((item) => item._id === workspaceId);
+    if (!workspace) {
+      reportError(new Error("Workspace not found."));
+      return;
+    }
+
+    setCreateDialog(null);
+    setRenameDialog(null);
+    setImportDialog({
+      workspaceId,
+      workspaceName: workspace.name,
+    });
+  };
   const openRenameWorkspaceDialog = (workspaceId: string) => {
     const workspace = workspaces.find((item) => item._id === workspaceId);
     if (!workspace) {
@@ -805,6 +830,47 @@ export default function App() {
     selectRequest(nextRequestId);
   };
 
+  const handleImportPostman = async ({
+    collectionJson,
+    projectName,
+  }: {
+    collectionJson: string;
+    projectName?: string;
+  }) => {
+    if (!importDialog) {
+      return;
+    }
+
+    const { project, importedFolders, importedRequests } =
+      await api.importPostmanCollection({
+        workspaceId: importDialog.workspaceId,
+        collectionJson,
+        projectName,
+      });
+
+    selectWorkspace(importDialog.workspaceId);
+    await loadWorkspaceTree(importDialog.workspaceId);
+
+    const importedProject = useWorkspaceStore
+      .getState()
+      .trees[importDialog.workspaceId]?.projects.find(
+        (item) => item._id === project._id,
+      );
+
+    selectProject(project._id);
+    selectRequest(getFirstProjectRequestId(importedProject));
+
+    const folderLabel =
+      importedFolders === 1 ? "1 folder" : `${importedFolders} folders`;
+    const requestLabel =
+      importedRequests === 1 ? "1 request" : `${importedRequests} requests`;
+    showSuccessToast(
+      importedFolders > 0
+        ? `Imported ${project.name} with ${requestLabel} and ${folderLabel}.`
+        : `Imported ${project.name} with ${requestLabel}.`,
+      "Postman Imported",
+    );
+  };
   const saveRequest = async () => {
     if (!draft) {
       return;
@@ -1028,6 +1094,7 @@ export default function App() {
             canManagePrivacy={canManagePrivacy}
             onCreateWorkspace={openCreateWorkspaceDialog}
             onCreateProject={openCreateProjectDialog}
+            onImportPostman={openImportPostmanDialog}
             onCreateFolder={openCreateFolderDialog}
             onCreateRequest={openCreateRequestDialog}
             onRenameWorkspace={openRenameWorkspaceDialog}
@@ -1284,6 +1351,12 @@ export default function App() {
           onSubmit={handleRenameEntity}
         />
       ) : null}
+      <ImportPostmanDialog
+        open={Boolean(importDialog)}
+        workspaceName={importDialog?.workspaceName}
+        onOpenChange={(open) => !open && setImportDialog(null)}
+        onSubmit={handleImportPostman}
+      />
       <HistoryDetailsDialog
         entry={historyDetailsEntry}
         open={Boolean(historyDetailsEntry)}
@@ -1292,5 +1365,9 @@ export default function App() {
     </>
   );
 }
+
+
+
+
 
 

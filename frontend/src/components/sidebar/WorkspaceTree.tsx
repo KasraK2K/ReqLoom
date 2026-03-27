@@ -30,6 +30,7 @@ import {
   FolderClosed,
   Eye,
   EyeOff,
+  FileUp,
   GripVertical,
   Layers3,
   Plus,
@@ -118,6 +119,7 @@ interface WorkspaceTreeProps {
   onSelectRequest: (requestId: string) => void;
   onCreateWorkspace: () => void;
   onCreateProject: (workspaceId?: string) => void;
+  onImportPostman: (workspaceId: string) => void;
   onCreateFolder: (projectId: string, parentFolderId?: string | null) => void;
   onCreateRequest: (projectId: string, folderId?: string | null) => void;
   onRenameWorkspace: (workspaceId: string) => void;
@@ -509,6 +511,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     onSelectRequest,
     onCreateWorkspace,
     onCreateProject,
+    onImportPostman,
     onCreateFolder,
     onCreateRequest,
     onRenameWorkspace,
@@ -1637,6 +1640,18 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                               ]
                             : undefined
                         }
+                        customActions={
+                          canCreateProject
+                            ? [
+                                {
+                                  key: "import-postman",
+                                  label: "Import Postman",
+                                  icon: FileUp,
+                                  onClick: () => onImportPostman(workspace._id),
+                                },
+                              ]
+                            : undefined
+                        }
                         onRename={() => onRenameWorkspace(workspace._id)}
                         onDuplicate={() => onDuplicateWorkspace(workspace._id)}
                         onDelete={() => onDeleteWorkspace(workspace._id)}
@@ -1825,4 +1840,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     </Card>
   );
 }
+
+
+
 

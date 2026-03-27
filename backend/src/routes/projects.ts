@@ -1,5 +1,7 @@
 import type {
   AdminUser,
+  ImportPostmanCollectionPayload,
+  ImportPostmanCollectionResponse,
   ProjectDoc,
   ProjectEnvVar,
   User,
@@ -21,6 +23,7 @@ import {
   canViewEntity,
   getRequiredUser,
 } from "../lib/permissions.js";
+import { parsePostmanCollection } from "../lib/postman-import.js";
 
 type SessionUser = AdminUser | User;
 
@@ -146,6 +149,123 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
+  app.post<{ Body: ImportPostmanCollectionPayload }>(
+    "/projects/import-postman",
+    { preHandler: app.authenticate, bodyLimit: 10 * 1024 * 1024 },
+    async (request): Promise<ImportPostmanCollectionResponse> => {
+      const user = getRequiredUser(request);
+      const workspace = await requireWorkspace(app, request.body.workspaceId);
+      if (!canAccessWorkspace(user, workspace) || user.role === "member") {
+        throw app.httpErrors.forbidden(
+          "You cannot import projects into this workspace",
+        );
+      }
+
+      const importedCollection = parsePostmanCollection(request.body.collectionJson);
+      const projectName = request.body.projectName?.trim() || importedCollection.projectName;
+      const now = isoNow();
+      const projectObjectId = createId();
+      const projectId = projectObjectId.toHexString();
+      const maxOrderRecord = await workspaceDataCollection(
+        app.mongo,
+        workspace._id,
+      )
+        .find({ entityType: "project" })
+        .sort({ order: -1 })
+        .limit(1)
+        .toArray();
+
+      const projectRecord = {
+        _id: projectObjectId,
+        entityType: "project",
+        workspaceId: workspace._id,
+        name: projectName,
+        envVars: importedCollection.envVars,
+        order:
+          ((maxOrderRecord[0] as { order?: number } | undefined)?.order ?? -1) +
+          1,
+        ownerId: user._id,
+        createdBy: user._id,
+        passwordHash: null,
+        isPasswordProtected: false,
+        isPrivate: false,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const records: Record<string, unknown>[] = [projectRecord];
+      let importedFolders = 0;
+      let importedRequests = 0;
+
+      const appendRequests = (
+        requests: typeof importedCollection.requests,
+        folderId: string | null,
+      ) => {
+        requests.forEach((importedRequest, index) => {
+          importedRequests += 1;
+          records.push({
+            _id: createId(),
+            entityType: "request",
+            workspaceId: workspace._id,
+            projectId,
+            folderId,
+            name: importedRequest.name,
+            method: importedRequest.method,
+            url: importedRequest.url,
+            headers: importedRequest.headers,
+            params: importedRequest.params,
+            body: importedRequest.body,
+            auth: importedRequest.auth,
+            responseHistory: [],
+            order: index,
+            isPrivate: false,
+            createdAt: now,
+            updatedAt: now,
+          });
+        });
+      };
+
+      const appendFolders = (
+        folders: typeof importedCollection.folders,
+        parentFolderId: string | null,
+      ) => {
+        folders.forEach((importedFolder, index) => {
+          importedFolders += 1;
+          const folderObjectId = createId();
+          const folderId = folderObjectId.toHexString();
+
+          records.push({
+            _id: folderObjectId,
+            entityType: "folder",
+            workspaceId: workspace._id,
+            projectId,
+            parentFolderId,
+            name: importedFolder.name,
+            order: index,
+            isPrivate: false,
+            createdAt: now,
+            updatedAt: now,
+          });
+
+          appendRequests(importedFolder.requests, folderId);
+          appendFolders(importedFolder.folders, folderId);
+        });
+      };
+
+      appendRequests(importedCollection.requests, null);
+      appendFolders(importedCollection.folders, null);
+
+      await workspaceDataCollection(app.mongo, workspace._id).insertMany(
+        records as never[],
+      );
+
+      return {
+        project: await requireProject(app, workspace._id, projectId, user),
+        importedFolders,
+        importedRequests,
+      };
+    },
+  );
   app.patch<{
     Params: { projectId: string };
     Body: {
@@ -457,3 +577,8 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
 };
 
 export default projectRoutes;
+
+
+
+
+

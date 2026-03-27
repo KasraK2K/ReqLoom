@@ -1,27 +1,38 @@
-import { Copy, EllipsisVertical, PenSquare, Plus, Trash2 } from "lucide-react";
+import {
+  Copy,
+  EllipsisVertical,
+  PenSquare,
+  Plus,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "../ui/button";
 
-interface ContextMenuCreateAction {
+export interface ContextMenuAction {
   key: string;
   label: string;
   onClick: () => void;
+  icon?: LucideIcon;
+  className?: string;
 }
 
 interface ContextMenusProps {
-  createActions?: ContextMenuCreateAction[];
+  createActions?: ContextMenuAction[];
+  customActions?: ContextMenuAction[];
   onRename?: () => void;
   onDuplicate?: () => void;
   onDelete?: () => void;
   leadingAccessory?: ReactNode;
 }
 
-const MENU_WIDTH = 168;
+const MENU_WIDTH = 172;
 const VIEWPORT_GAP = 8;
 
 export function ContextMenus({
   createActions,
+  customActions,
   onRename,
   onDuplicate,
   onDelete,
@@ -38,8 +49,13 @@ export function ContextMenus({
       [
         ...(createActions ?? []).map((action) => ({
           ...action,
-          icon: Plus,
-          className: "text-foreground",
+          icon: action.icon ?? Plus,
+          className: action.className ?? "text-foreground",
+        })),
+        ...(customActions ?? []).map((action) => ({
+          ...action,
+          icon: action.icon ?? Plus,
+          className: action.className ?? "text-foreground",
         })),
         onRename
           ? {
@@ -69,11 +85,11 @@ export function ContextMenus({
             }
           : null,
       ].filter(Boolean),
-    [createActions, onDelete, onDuplicate, onRename],
+    [createActions, customActions, onDelete, onDuplicate, onRename],
   ) as Array<{
     key: string;
     label: string;
-    icon: typeof Plus;
+    icon: LucideIcon;
     className: string;
     onClick: () => void;
   }>;

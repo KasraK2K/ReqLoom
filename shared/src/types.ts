@@ -268,6 +268,18 @@ export interface WorkspaceTreeResponse {
   tree: WorkspaceTree;
 }
 
+export interface ImportPostmanCollectionPayload {
+  workspaceId: string;
+  collectionJson: string;
+  projectName?: string;
+}
+
+export interface ImportPostmanCollectionResponse {
+  project: ProjectDoc;
+  importedFolders: number;
+  importedRequests: number;
+}
+
 export interface ListWorkspacesResponse {
   workspaces: WorkspaceMeta[];
 }
@@ -279,3 +291,4 @@ export interface ListUsersResponse {
 export interface HistoryResponse {
   history: HistoryDoc[];
 }
+

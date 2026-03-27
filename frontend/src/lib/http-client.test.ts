@@ -28,6 +28,37 @@ describe("api", () => {
     );
   });
 
+  it("sends the Postman collection payload when importing a project", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        project: { _id: "project-1" },
+        importedFolders: 2,
+        importedRequests: 4,
+      }),
+    } as Response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.importPostmanCollection({
+      workspaceId: "workspace-1",
+      collectionJson: '{"info":{"name":"Imported"},"item":[]}',
+      projectName: "Imported Project",
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = new Headers(init.headers);
+
+    expect(headers.get("content-type")).toBe("application/json");
+    expect(init.body).toBe(
+      JSON.stringify({
+        workspaceId: "workspace-1",
+        collectionJson: '{"info":{"name":"Imported"},"item":[]}',
+        projectName: "Imported Project",
+      }),
+    );
+  });
   it("extracts the message from JSON error responses", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
@@ -77,3 +108,4 @@ describe("api", () => {
     expect(init.signal).toBe(controller.signal);
   });
 });
+

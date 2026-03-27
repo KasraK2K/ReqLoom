@@ -4,6 +4,8 @@ import type {
   ExecuteRequestResult,
   FolderDoc,
   HistoryResponse,
+  ImportPostmanCollectionPayload,
+  ImportPostmanCollectionResponse,
   ListUsersResponse,
   ListWorkspacesResponse,
   LoginPayload,
@@ -130,6 +132,11 @@ export const api = {
       `/projects/${projectId}?workspaceId=${workspaceId}`,
       { method: "DELETE" },
     ),
+  importPostmanCollection: (payload: ImportPostmanCollectionPayload) =>
+    requestJson<ImportPostmanCollectionResponse>("/projects/import-postman", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   createFolder: (
     workspaceId: string,
     projectId: string,
@@ -267,3 +274,5 @@ export const api = {
       method: "DELETE",
     }),
 };
+
+
