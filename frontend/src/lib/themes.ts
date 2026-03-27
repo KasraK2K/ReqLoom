@@ -1,4 +1,4 @@
-export type ThemeMode = "light" | "dark";
+﻿export type ThemeMode = "light" | "dark";
 
 export interface ThemePreview {
   backdrop: string;
@@ -344,7 +344,7 @@ export const APP_THEMES: AppTheme[] = [
     description: "Airy paper white with cool blue structure.",
     preview: {
       backdrop: "linear-gradient(180deg,#f7fbff 0%,#eef5ff 100%)",
-      header: "#ffffff",
+      header: "#d7e7fb",
       sidebar: "#edf4ff",
       panel: "#dde9ff",
       panelAlt: "#ffffff",
@@ -365,8 +365,8 @@ export const APP_THEMES: AppTheme[] = [
       "--surface-1": "250 252 255",
       "--surface-2": "239 246 255",
       "--surface-3": "226 236 255",
-      "--header-bg": "255 255 255",
-      "--header-border": "198 214 238",
+      "--header-bg": "215 231 251",
+      "--header-border": "164 188 224",
       "--app-bg-start": "#f7fbff",
       "--app-bg-mid": "#eef5ff",
       "--app-bg-end": "#e5f0ff",
@@ -396,7 +396,7 @@ export const APP_THEMES: AppTheme[] = [
     description: "Warm parchment neutrals with copper-gold action cues.",
     preview: {
       backdrop: "linear-gradient(180deg,#faf5ed 0%,#f6efe4 100%)",
-      header: "#fffaf2",
+      header: "#e9dcc6",
       sidebar: "#f0e5d7",
       panel: "#e6d6c2",
       panelAlt: "#fffaf2",
@@ -417,8 +417,8 @@ export const APP_THEMES: AppTheme[] = [
       "--surface-1": "255 251 245",
       "--surface-2": "244 235 223",
       "--surface-3": "231 214 194",
-      "--header-bg": "255 250 242",
-      "--header-border": "220 195 171",
+      "--header-bg": "233 220 198",
+      "--header-border": "196 168 138",
       "--app-bg-start": "#faf5ed",
       "--app-bg-mid": "#f6efe4",
       "--app-bg-end": "#efe5d7",
@@ -448,7 +448,7 @@ export const APP_THEMES: AppTheme[] = [
     description: "Clinical mint surfaces with fresh green-blue highlights.",
     preview: {
       backdrop: "linear-gradient(180deg,#f2fcf9 0%,#ecfaf5 100%)",
-      header: "#fcfffe",
+      header: "#d8f0e8",
       sidebar: "#e5f6f0",
       panel: "#d0efe4",
       panelAlt: "#fcfffe",
@@ -469,8 +469,8 @@ export const APP_THEMES: AppTheme[] = [
       "--surface-1": "250 255 253",
       "--surface-2": "231 248 241",
       "--surface-3": "208 239 228",
-      "--header-bg": "252 255 254",
-      "--header-border": "190 226 218",
+      "--header-bg": "216 240 232",
+      "--header-border": "157 198 188",
       "--app-bg-start": "#f2fcf9",
       "--app-bg-mid": "#ecfaf5",
       "--app-bg-end": "#e2f5ee",
@@ -500,7 +500,7 @@ export const APP_THEMES: AppTheme[] = [
     description: "Bright coral and apricot on crisp neutral panels.",
     preview: {
       backdrop: "linear-gradient(180deg,#fff6f3 0%,#fff0eb 100%)",
-      header: "#fffdfc",
+      header: "#f9ddd4",
       sidebar: "#ffe9e1",
       panel: "#ffd6ca",
       panelAlt: "#fffdfc",
@@ -521,8 +521,8 @@ export const APP_THEMES: AppTheme[] = [
       "--surface-1": "255 253 251",
       "--surface-2": "255 236 229",
       "--surface-3": "255 214 202",
-      "--header-bg": "255 253 252",
-      "--header-border": "239 196 186",
+      "--header-bg": "249 221 212",
+      "--header-border": "218 164 153",
       "--app-bg-start": "#fff6f3",
       "--app-bg-mid": "#fff0eb",
       "--app-bg-end": "#ffe8e0",
@@ -552,7 +552,7 @@ export const APP_THEMES: AppTheme[] = [
     description: "Cold blue-gray surfaces with crisp frosted contrast.",
     preview: {
       backdrop: "linear-gradient(180deg,#f2f8fd 0%,#ebf2fb 100%)",
-      header: "#fbfdff",
+      header: "#d8e4f3",
       sidebar: "#e4edf8",
       panel: "#d2e0f0",
       panelAlt: "#fbfdff",
@@ -573,8 +573,8 @@ export const APP_THEMES: AppTheme[] = [
       "--surface-1": "251 253 255",
       "--surface-2": "228 237 248",
       "--surface-3": "210 224 240",
-      "--header-bg": "251 253 255",
-      "--header-border": "192 209 229",
+      "--header-bg": "216 228 243",
+      "--header-border": "160 184 214",
       "--app-bg-start": "#f2f8fd",
       "--app-bg-mid": "#ebf2fb",
       "--app-bg-end": "#e1eaf6",
@@ -604,7 +604,7 @@ export const APP_THEMES: AppTheme[] = [
     description: "Soft sand tones with olive and bronze operator accents.",
     preview: {
       backdrop: "linear-gradient(180deg,#f7f3e9 0%,#f2eddf 100%)",
-      header: "#fffdf7",
+      header: "#e8ddc4",
       sidebar: "#eee7d4",
       panel: "#dfd1b2",
       panelAlt: "#fffdf7",
@@ -625,8 +625,8 @@ export const APP_THEMES: AppTheme[] = [
       "--surface-1": "255 253 247",
       "--surface-2": "238 231 212",
       "--surface-3": "223 209 178",
-      "--header-bg": "255 253 247",
-      "--header-border": "221 209 180",
+      "--header-bg": "232 221 196",
+      "--header-border": "194 176 139",
       "--app-bg-start": "#f7f3e9",
       "--app-bg-mid": "#f2eddf",
       "--app-bg-end": "#ebe3d2",
@@ -704,3 +704,4 @@ export function applyTheme(themeId: ThemeId) {
 export function applyStoredTheme() {
   applyTheme(getStoredThemeId());
 }
+

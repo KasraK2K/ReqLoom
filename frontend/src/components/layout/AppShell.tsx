@@ -504,7 +504,7 @@ export function AppShell({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-border/60 bg-[rgb(var(--header-bg)/0.84)] px-4 py-2.5 shadow-[inset_0_-1px_0_rgb(var(--header-border)/0.3)] backdrop-blur-xl sm:px-5">
+      <header className="shrink-0 border-b border-border/60 bg-[rgb(var(--header-bg)/0.94)] px-4 py-2.5 shadow-[0_14px_32px_rgb(var(--shadow)/0.12),inset_0_-1px_0_rgb(var(--header-border)/0.42)] backdrop-blur-xl sm:px-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <img
@@ -698,3 +698,4 @@ export function AppShell({
     </div>
   );
 }
+
