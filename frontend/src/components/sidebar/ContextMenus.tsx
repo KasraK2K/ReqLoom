@@ -1,4 +1,4 @@
-import {
+﻿import {
   Copy,
   EllipsisVertical,
   PenSquare,
@@ -80,7 +80,7 @@ export function ContextMenus({
               key: "delete",
               label: "Delete",
               icon: Trash2,
-              className: "text-rose-200 hover:text-rose-100",
+              className: "",
               onClick: onDelete,
             }
           : null,
@@ -181,6 +181,7 @@ export function ContextMenus({
                 <Button
                   key={action.key}
                   variant="ghost"
+                  data-danger={action.key === "delete" ? "true" : undefined}
                   className={`app-dropdown-item h-8 justify-start rounded-md px-2 text-xs ${action.className}`}
                   onClick={() => runAction(action.onClick)}
                 >
@@ -216,3 +217,5 @@ export function ContextMenus({
     </>
   );
 }
+
+

@@ -37,6 +37,15 @@
   --scrollbar-thumb-start-active: rgba(145, 211, 255, 0.62);
   --scrollbar-thumb-end-active: rgba(97, 176, 255, 0.45);
   --scrollbar-track-line: rgba(255, 255, 255, 0.05);
+  --danger-text: 254 205 211;
+  --danger-hover-text: 255 228 230;
+  --danger-hover-bg: rgba(244, 63, 94, 0.18);
+}
+
+html[data-theme-mode="light"] {
+  --danger-text: 190 24 93;
+  --danger-hover-text: 159 18 57;
+  --danger-hover-bg: rgba(244, 63, 94, 0.12);
 }
 
 html {
@@ -129,15 +138,27 @@ textarea {
   align-items: center;
   border-radius: 0.6rem;
   padding: 0 0.625rem;
-  color: rgb(var(--foreground));
+  color: rgb(var(--foreground) / 0.9);
   font-size: 0.875rem;
   line-height: 1.25rem;
   transition: background-color 150ms ease, color 150ms ease;
 }
 
+.app-dropdown-item:hover,
 .app-dropdown-item:focus-visible {
   outline: none;
   background: rgb(var(--surface-3) / 0.86);
+  color: rgb(var(--foreground));
+}
+
+.app-dropdown-item[data-danger="true"] {
+  color: rgb(var(--danger-text));
+}
+
+.app-dropdown-item[data-danger="true"]:hover,
+.app-dropdown-item[data-danger="true"]:focus-visible {
+  background: var(--danger-hover-bg);
+  color: rgb(var(--danger-hover-text));
 }
 
 ::-webkit-scrollbar {
@@ -255,3 +276,4 @@ textarea {
 .request-body-editor .cm-dropCursor {
   border-left-color: var(--editor-caret);
 }
+
