@@ -180,6 +180,62 @@ function getFolderContainerKey(projectId: string, parentFolderId?: string | null
     : `project:${projectId}:folders`;
 }
 
+const SIDEBAR_EXPANSION_STORAGE_KEY = "httpclient.sidebar-expansion";
+
+interface SidebarExpansionState {
+  projects: Record<string, boolean>;
+  folders: Record<string, boolean>;
+}
+
+function isBooleanRecord(value: unknown): value is Record<string, boolean> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Object.values(value).every((entry) => typeof entry === "boolean")
+  );
+}
+
+function loadSidebarExpansionState(): SidebarExpansionState {
+  if (typeof window === "undefined") {
+    return { projects: {}, folders: {} };
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(SIDEBAR_EXPANSION_STORAGE_KEY);
+    if (!rawValue) {
+      return { projects: {}, folders: {} };
+    }
+
+    const parsedValue = JSON.parse(rawValue) as {
+      projects?: unknown;
+      folders?: unknown;
+    };
+
+    return {
+      projects: isBooleanRecord(parsedValue.projects) ? parsedValue.projects : {},
+      folders: isBooleanRecord(parsedValue.folders) ? parsedValue.folders : {},
+    };
+  } catch {
+    return { projects: {}, folders: {} };
+  }
+}
+
+function persistSidebarExpansionState(state: SidebarExpansionState) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      SIDEBAR_EXPANSION_STORAGE_KEY,
+      JSON.stringify(state),
+    );
+  } catch {
+    return;
+  }
+}
+
+
 function getDragEntityId(data: TreeDragData) {
   switch (data.kind) {
     case "workspace":
@@ -542,10 +598,10 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>(
-    {},
+    () => loadSidebarExpansionState().projects,
   );
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>(
-    {},
+    () => loadSidebarExpansionState().folders,
   );
   const [activeDragData, setActiveDragData] = useState<TreeDragData | null>(null);
   const [dropTarget, setDropTarget] = useState<DropTargetState | null>(null);
@@ -588,6 +644,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
 
     return map;
   }, [treeByWorkspace]);
+
   const folderById = useMemo(() => {
     const map: Record<string, TreeFolder> = {};
 
@@ -599,6 +656,14 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
 
     return map;
   }, [projectById]);
+
+
+  useEffect(() => {
+    persistSidebarExpansionState({
+      projects: expandedProjects,
+      folders: expandedFolders,
+    });
+  }, [expandedFolders, expandedProjects]);
 
   const requestById = useMemo(() => {
     const map: Record<string, RequestDoc> = {};
@@ -1840,6 +1905,9 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     </Card>
   );
 }
+
+
+
 
 
 
