@@ -117,7 +117,7 @@ interface WorkspaceTreeProps {
   onSelectProject: (projectId: string) => void;
   onSelectRequest: (requestId: string) => void;
   onCreateWorkspace: () => void;
-  onCreateProject: () => void;
+  onCreateProject: (workspaceId?: string) => void;
   onCreateFolder: (projectId: string, parentFolderId?: string | null) => void;
   onCreateRequest: (projectId: string, folderId?: string | null) => void;
   onRenameWorkspace: (workspaceId: string) => void;
@@ -1433,6 +1433,18 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                       </div>
                       {!isDragging ? (
                         <ContextMenus
+                          createActions={[
+                            {
+                              key: "new-folder",
+                              label: "New Folder",
+                              onClick: () => onCreateFolder(projectId, folder._id),
+                            },
+                            {
+                              key: "new-request",
+                              label: "New Request",
+                              onClick: () => onCreateRequest(projectId, folder._id),
+                            },
+                          ]}
                           leadingAccessory={
                             canManagePrivacy ? (
                               <PrivacyToggleButton
@@ -1444,7 +1456,6 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                               />
                             ) : null
                           }
-                          onCreate={() => onCreateRequest(projectId, folder._id)}
                           onRename={() => onRenameFolder(folder._id)}
                           onDuplicate={() => onDuplicateFolder(folder._id)}
                           onDelete={() => onDeleteFolder(folder._id)}
@@ -1493,14 +1504,6 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                             <FolderDropPlaceholder folder={childFolderPreview.folder} />
                           </DropPlaceholderTarget>
                         ) : null}
-                        <Button
-                          variant="ghost"
-                          className="h-6 w-full justify-start rounded-md px-1.5 text-[12px] text-muted hover:bg-white/[0.04] hover:text-foreground"
-                          onClick={() => onCreateFolder(projectId, folder._id)}
-                        >
-                          <Plus className="h-3 w-3" />
-                          Add folder
-                        </Button>
                       </div>
                     </DropPlaceholderTarget>
                   ) : null,
@@ -1623,8 +1626,16 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                     </div>
                     {!isDragging ? (
                       <ContextMenus
-                        onCreate={
-                          isActiveWorkspace && canCreateProject ? onCreateProject : undefined
+                        createActions={
+                          canCreateProject
+                            ? [
+                                {
+                                  key: "new-project",
+                                  label: "New Project",
+                                  onClick: () => onCreateProject(workspace._id),
+                                },
+                              ]
+                            : undefined
                         }
                         onRename={() => onRenameWorkspace(workspace._id)}
                         onDuplicate={() => onDuplicateWorkspace(workspace._id)}
@@ -1726,6 +1737,18 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                                   </div>
                                   {!isDragging ? (
                                     <ContextMenus
+                                      createActions={[
+                                        {
+                                          key: "new-folder",
+                                          label: "New Folder",
+                                          onClick: () => onCreateFolder(project._id),
+                                        },
+                                        {
+                                          key: "new-request",
+                                          label: "New Request",
+                                          onClick: () => onCreateRequest(project._id),
+                                        },
+                                      ]}
                                       leadingAccessory={
                                         canManagePrivacy ? (
                                           <PrivacyToggleButton
@@ -1741,7 +1764,6 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                                           />
                                         ) : null
                                       }
-                                      onCreate={() => onCreateRequest(project._id)}
                                       onRename={() => onRenameProject(project._id)}
                                       onDuplicate={() => onDuplicateProject(project._id)}
                                       onDelete={() => onDeleteProject(project._id)}
@@ -1780,14 +1802,6 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                                       <FolderDropPlaceholder folder={projectFolderPreview.folder} />
                                     </DropPlaceholderTarget>
                                   ) : null}
-                                  <Button
-                                    variant="ghost"
-                                    className="h-6 w-full justify-start rounded-md px-1.5 text-[12px] text-muted hover:bg-white/[0.04] hover:text-foreground"
-                                    onClick={() => onCreateFolder(project._id)}
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                    Add folder
-                                  </Button>
                                 </div>
                               ) : null,
                           };
@@ -1811,3 +1825,4 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     </Card>
   );
 }
+

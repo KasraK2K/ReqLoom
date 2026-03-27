@@ -322,13 +322,16 @@ export default function App() {
     setCreateDialog({ kind: "workspace" });
   };
 
-  const openCreateProjectDialog = () => {
+  const openCreateProjectDialog = (workspaceId?: string) => {
     if (!canCreateProject) {
       reportError(new Error("Members cannot create projects."));
       return;
     }
 
-    if (!activeWorkspace) {
+    const targetWorkspace = workspaceId
+      ? workspaces.find((workspace) => workspace._id === workspaceId)
+      : activeWorkspace;
+    if (!targetWorkspace) {
       reportError(new Error("Select a workspace before creating a project."));
       return;
     }
@@ -336,8 +339,8 @@ export default function App() {
     setRenameDialog(null);
     setCreateDialog({
       kind: "project",
-      workspaceId: activeWorkspace._id,
-      workspaceName: activeWorkspace.name,
+      workspaceId: targetWorkspace._id,
+      workspaceName: targetWorkspace.name,
     });
   };
 
@@ -1289,4 +1292,5 @@ export default function App() {
     </>
   );
 }
+
 

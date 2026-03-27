@@ -3,19 +3,25 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "../ui/button";
 
+interface ContextMenuCreateAction {
+  key: string;
+  label: string;
+  onClick: () => void;
+}
+
 interface ContextMenusProps {
-  onCreate?: () => void;
+  createActions?: ContextMenuCreateAction[];
   onRename?: () => void;
   onDuplicate?: () => void;
   onDelete?: () => void;
   leadingAccessory?: ReactNode;
 }
 
-const MENU_WIDTH = 152;
+const MENU_WIDTH = 168;
 const VIEWPORT_GAP = 8;
 
 export function ContextMenus({
-  onCreate,
+  createActions,
   onRename,
   onDuplicate,
   onDelete,
@@ -30,15 +36,11 @@ export function ContextMenus({
   const actions = useMemo(
     () =>
       [
-        onCreate
-          ? {
-              key: "create",
-              label: "Create",
-              icon: Plus,
-              className: "text-foreground",
-              onClick: onCreate,
-            }
-          : null,
+        ...(createActions ?? []).map((action) => ({
+          ...action,
+          icon: Plus,
+          className: "text-foreground",
+        })),
         onRename
           ? {
               key: "rename",
@@ -67,7 +69,7 @@ export function ContextMenus({
             }
           : null,
       ].filter(Boolean),
-    [onCreate, onDelete, onDuplicate, onRename],
+    [createActions, onDelete, onDuplicate, onRename],
   ) as Array<{
     key: string;
     label: string;
@@ -198,4 +200,3 @@ export function ContextMenus({
     </>
   );
 }
-
