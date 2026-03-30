@@ -21,6 +21,14 @@ export function ResponseViewer({ response }: ResponseViewerProps) {
     }
     return `data:${response.contentType};base64,${response.base64Body}`;
   }, [response]);
+  const headersJson = useMemo(
+    () => JSON.stringify(response?.headers ?? {}, null, 2),
+    [response?.headers],
+  );
+  const cookiesJson = useMemo(
+    () => JSON.stringify(response?.cookies ?? [], null, 2),
+    [response?.cookies],
+  );
 
   const copyResponse = async () => {
     const value = response?.textBody ?? response?.base64Body;
@@ -105,14 +113,10 @@ export function ResponseViewer({ response }: ResponseViewerProps) {
               </div>
             </TabsContent>
             <TabsContent value="headers" className="min-h-0 flex-1 pt-4">
-              <pre className="h-full min-h-0 overflow-auto rounded-xl bg-slate-950/70 p-4 font-mono text-sm text-slate-200 whitespace-pre-wrap break-all">
-                {JSON.stringify(response.headers, null, 2)}
-              </pre>
+              <JSONTree value={headersJson} className="flex-1" />
             </TabsContent>
             <TabsContent value="cookies" className="min-h-0 flex-1 pt-4">
-              <pre className="h-full min-h-0 overflow-auto rounded-xl bg-slate-950/70 p-4 font-mono text-sm text-slate-200 whitespace-pre-wrap break-all">
-                {JSON.stringify(response.cookies, null, 2)}
-              </pre>
+              <JSONTree value={cookiesJson} className="flex-1" />
             </TabsContent>
           </Tabs>
         )}
