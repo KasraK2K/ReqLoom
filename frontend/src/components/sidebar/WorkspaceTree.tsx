@@ -1673,16 +1673,16 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                       }}
                     >
                       <div className="ml-2 space-y-0.5 pl-1.5">
-                        {renderRequestList(
-                          workspaceId,
-                          projectId,
-                          folder.requests,
-                          folder._id,
-                        )}
                         {renderFolderList(
                           workspaceId,
                           projectId,
                           folder.folders,
+                          folder._id,
+                        )}
+                        {renderRequestList(
+                          workspaceId,
+                          projectId,
+                          folder.requests,
                           folder._id,
                         )}
                         {childFolderPreview && !childFolderPreview.beforeFolderId ? (
@@ -2029,16 +2029,16 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                                 Boolean(projectFolderPreview)) &&
                               !isDragging ? (
                                 <div className="ml-2 space-y-0.5 pl-1.5">
-                                  {renderRequestList(
-                                    workspace._id,
-                                    project._id,
-                                    project.requests,
-                                    null,
-                                  )}
                                   {renderFolderList(
                                     workspace._id,
                                     project._id,
                                     project.folders,
+                                    null,
+                                  )}
+                                  {renderRequestList(
+                                    workspace._id,
+                                    project._id,
+                                    project.requests,
                                     null,
                                   )}
                                   {projectFolderPreview && !projectFolderPreview.beforeFolderId ? (
