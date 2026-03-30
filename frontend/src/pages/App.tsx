@@ -1,4 +1,4 @@
-﻿import type { HistoryDoc, RequestDoc, User } from "@restify/shared";
+import type { HistoryDoc, RequestDoc, User } from "@restify/shared";
 import { Activity, FileText, Settings2, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CreateSuperuserPage } from "../components/auth/CreateSuperuserPage";
@@ -1091,10 +1091,125 @@ export default function App() {
     return <LoginPage onSubmit={login} />;
   }
 
+  const currentUser = user;
+
+  function InspectorPanel() {
+
+    return (
+      <Tabs
+        value={normalizedInspectorTab}
+        onValueChange={(value) => setInspectorTab(value as InspectorTab)}
+      >
+        <TabsList className="mb-4 flex w-full flex-wrap justify-start gap-1">
+          <TabsTrigger
+            value="environment"
+            className="inline-flex h-9 w-9 items-center justify-center p-0"
+            aria-label="Environment"
+            title="Environment"
+          >
+            <Settings2 className="h-4 w-4" />
+          </TabsTrigger>
+          <TabsTrigger
+            value="history"
+            className="inline-flex h-9 w-9 items-center justify-center p-0"
+            aria-label="History"
+            title="History"
+          >
+            <Activity className="h-4 w-4" />
+          </TabsTrigger>
+          {currentUser.role === "superadmin" ? (
+            <TabsTrigger
+              value="admin"
+              className="inline-flex h-9 w-9 items-center justify-center p-0"
+              aria-label="Admin"
+              title="Admin"
+            >
+              <Users className="h-4 w-4" />
+            </TabsTrigger>
+          ) : null}
+        </TabsList>
+        <TabsContent value="environment">
+          <EnvVarEditor
+            projectName={activeProject?.name}
+            envVars={activeProjectEnvVars}
+            onChange={(rows) =>
+              activeProject && setEnvVars(activeProject._id, rows)
+            }
+            onSave={() => updateEnvironment().catch(reportError)}
+          />
+        </TabsContent>
+        <TabsContent value="history">
+          <Card>
+            <CardHeader>
+              <CardTitle>Request History</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {activeHistory.length === 0 ? (
+                <p className="text-sm text-muted">
+                  The last 50 project executions will appear here.
+                </p>
+              ) : null}
+              {activeHistory.map((entry: HistoryDoc) => (
+                <div
+                  key={entry._id}
+                  className="rounded-2xl border border-border/45 bg-[rgb(var(--surface-2)/0.48)] p-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-3 text-sm">
+                        <span className={`font-medium ${METHOD_TEXT_STYLES[entry.method]}`}>
+                          {entry.method}
+                        </span>
+                        <span className="text-muted">{entry.status}</span>
+                      </div>
+                      <div className="mt-1 truncate text-xs text-muted">
+                        {entry.url}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      className="h-8 shrink-0 rounded-lg px-2 text-xs text-foreground"
+                      onClick={() => setHistoryDetailsEntry(entry)}
+                      title="Show history details"
+                      aria-label="Show history details"
+                    >
+                      <FileText className="h-4 w-4" />
+                      Details
+                    </Button>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-xs text-muted">
+                    <span>{new Date(entry.createdAt).toLocaleString()}</span>
+                    <span>{entry.durationMs} ms</span>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        {currentUser.role === "superadmin" ? (
+          <TabsContent value="admin">
+            <UserManagement
+              users={users}
+              workspaces={workspaces}
+              onCreate={(payload) => api.createUser(payload).then(refreshUsers)}
+              onUpdate={(userId, payload) =>
+                api.updateUser(userId, payload).then(refreshUsers)
+              }
+              onDelete={(userId) =>
+                deleteEntity("user", () =>
+                  api.deleteUser(userId).then(refreshUsers),
+                )
+              }
+            />
+          </TabsContent>
+        ) : null}
+      </Tabs>
+    );
+  }
   return (
     <>
       <AppShell
-        user={user}
+        user={currentUser}
         activeWorkspaceName={activeWorkspace?.name}
         activeProjectName={activeProject?.name}
         activeRequestName={activeRequest?.name}
@@ -1241,116 +1356,7 @@ export default function App() {
           />
         }
         response={<ResponseViewer response={response} />}
-        inspector={
-          <Tabs
-            value={normalizedInspectorTab}
-            onValueChange={(value) => setInspectorTab(value as InspectorTab)}
-          >
-            <TabsList className="mb-4 flex w-full flex-wrap justify-start gap-1">
-              <TabsTrigger
-                value="environment"
-                className="inline-flex h-9 w-9 items-center justify-center p-0"
-                aria-label="Environment"
-                title="Environment"
-              >
-                <Settings2 className="h-4 w-4" />
-              </TabsTrigger>
-              <TabsTrigger
-                value="history"
-                className="inline-flex h-9 w-9 items-center justify-center p-0"
-                aria-label="History"
-                title="History"
-              >
-                <Activity className="h-4 w-4" />
-              </TabsTrigger>
-              {user.role === "superadmin" ? (
-                <TabsTrigger
-                  value="admin"
-                  className="inline-flex h-9 w-9 items-center justify-center p-0"
-                  aria-label="Admin"
-                  title="Admin"
-                >
-                  <Users className="h-4 w-4" />
-                </TabsTrigger>
-              ) : null}
-            </TabsList>
-            <TabsContent value="environment">
-              <EnvVarEditor
-                projectName={activeProject?.name}
-                envVars={activeProjectEnvVars}
-                onChange={(rows) =>
-                  activeProject && setEnvVars(activeProject._id, rows)
-                }
-                onSave={() => updateEnvironment().catch(reportError)}
-              />
-            </TabsContent>
-            <TabsContent value="history">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Request History</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {activeHistory.length === 0 ? (
-                    <p className="text-sm text-muted">
-                      The last 50 project executions will appear here.
-                    </p>
-                  ) : null}
-                  {activeHistory.map((entry: HistoryDoc) => (
-                    <div
-                      key={entry._id}
-                      className="rounded-2xl border border-border/45 bg-[rgb(var(--surface-2)/0.48)] p-3"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-3 text-sm">
-                            <span className={`font-medium ${METHOD_TEXT_STYLES[entry.method]}`}>
-                              {entry.method}
-                            </span>
-                            <span className="text-muted">{entry.status}</span>
-                          </div>
-                          <div className="mt-1 truncate text-xs text-muted">
-                            {entry.url}
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          className="h-8 shrink-0 rounded-lg px-2 text-xs text-foreground"
-                          onClick={() => setHistoryDetailsEntry(entry)}
-                          title="Show history details"
-                          aria-label="Show history details"
-                        >
-                          <FileText className="h-4 w-4" />
-                          Details
-                        </Button>
-                      </div>
-                      <div className="mt-2 flex items-center justify-between text-xs text-muted">
-                        <span>{new Date(entry.createdAt).toLocaleString()}</span>
-                        <span>{entry.durationMs} ms</span>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </TabsContent>
-            {user.role === "superadmin" ? (
-              <TabsContent value="admin">
-                <UserManagement
-                  users={users}
-                  workspaces={workspaces}
-                  onCreate={(payload) => api.createUser(payload).then(refreshUsers)}
-                  onUpdate={(userId, payload) =>
-                    api.updateUser(userId, payload).then(refreshUsers)
-                  }
-                  onDelete={(userId) =>
-                    deleteEntity("user", () =>
-                      api.deleteUser(userId).then(refreshUsers),
-                    )
-                  }
-                />
-              </TabsContent>
-            ) : null}
-          </Tabs>
-        }
+        inspector={<InspectorPanel />}
       />
       {createDialogConfig ? (
         <CreateEntityDialog
@@ -1392,6 +1398,9 @@ export default function App() {
     </>
   );
 }
+
+
+
 
 
 

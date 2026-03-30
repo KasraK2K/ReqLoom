@@ -1,12 +1,17 @@
-﻿import type {
+import type {
   CSSProperties,
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  ChevronLeft,
-  ChevronRight,
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
   Layers3,
   LogOut,
   Send,
@@ -23,16 +28,18 @@ import { Button } from "../ui/button";
 import { ThemeSelector } from "./ThemeSelector";
 
 const SIDEBAR_WIDTH_KEY = "httpclient.sidebar-width";
+const SIDEBAR_COLLAPSED_KEY = "httpclient.sidebar-collapsed";
 const INSPECTOR_WIDTH_KEY = "httpclient.inspector-width";
 const INSPECTOR_COLLAPSED_KEY = "httpclient.inspector-collapsed";
 const BUILDER_HEIGHT_KEY = "httpclient.builder-height";
 const DEFAULT_SIDEBAR_WIDTH = 340;
 const MIN_SIDEBAR_WIDTH = 260;
 const MAX_SIDEBAR_WIDTH = 560;
+const COLLAPSED_SIDEBAR_WIDTH = 0;
 const DEFAULT_INSPECTOR_WIDTH = 336;
 const MIN_INSPECTOR_WIDTH = 280;
 const MAX_INSPECTOR_WIDTH = 520;
-const COLLAPSED_INSPECTOR_WIDTH = 52;
+const COLLAPSED_INSPECTOR_WIDTH = 0;
 const DEFAULT_BUILDER_HEIGHT = 420;
 const MIN_BUILDER_HEIGHT = 320;
 const MIN_RESPONSE_HEIGHT = 240;
@@ -183,6 +190,24 @@ function RoleBadge({
   );
 }
 
+interface AppShellPanelControlsValue {
+  isSidebarCollapsed: boolean;
+  isInspectorCollapsed: boolean;
+  collapseSidebar: () => void;
+  expandSidebar: () => void;
+  toggleSidebar: () => void;
+  collapseInspector: () => void;
+  expandInspector: () => void;
+  toggleInspector: () => void;
+}
+
+const AppShellPanelControlsContext =
+  createContext<AppShellPanelControlsValue | null>(null);
+
+export function useAppShellPanels() {
+  return useContext(AppShellPanelControlsContext);
+}
+
 export function AppShell({
   user,
   activeWorkspaceName,
@@ -206,6 +231,7 @@ export function AppShell({
   const [isResizingSidebar, setIsResizingSidebar] = useState(false);
   const [isResizingInspector, setIsResizingInspector] = useState(false);
   const [isResizingCenter, setIsResizingCenter] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
   const [hasLoadedLayoutPrefs, setHasLoadedLayoutPrefs] = useState(false);
 
@@ -241,6 +267,13 @@ export function AppShell({
         if (!Number.isNaN(parsedHeight)) {
           setBuilderHeight(clampBuilderHeight(parsedHeight));
         }
+      }
+
+      const storedSidebarState = window.localStorage.getItem(
+        SIDEBAR_COLLAPSED_KEY,
+      );
+      if (storedSidebarState) {
+        setIsSidebarCollapsed(storedSidebarState === "true");
       }
 
       const storedInspectorState = window.localStorage.getItem(
@@ -303,6 +336,21 @@ export function AppShell({
 
     try {
       window.localStorage.setItem(
+        SIDEBAR_COLLAPSED_KEY,
+        String(isSidebarCollapsed),
+      );
+    } catch {
+      return;
+    }
+  }, [hasLoadedLayoutPrefs, isSidebarCollapsed]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !hasLoadedLayoutPrefs) {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(
         INSPECTOR_COLLAPSED_KEY,
         String(isInspectorCollapsed),
       );
@@ -315,11 +363,14 @@ export function AppShell({
     const clampToViewport = () => {
       const containerWidth = mainRef.current?.getBoundingClientRect().width;
       if (containerWidth) {
+        const effectiveSidebarWidth = isSidebarCollapsed
+          ? COLLAPSED_SIDEBAR_WIDTH
+          : sidebarWidth;
         const nextInspectorWidth = isInspectorCollapsed
           ? inspectorWidth
           : clampInspectorWidth(
               inspectorWidth,
-              getInspectorMaxWidth(containerWidth, sidebarWidth),
+              getInspectorMaxWidth(containerWidth, effectiveSidebarWidth),
             );
 
         if (!isInspectorCollapsed && nextInspectorWidth !== inspectorWidth) {
@@ -350,7 +401,7 @@ export function AppShell({
     clampToViewport();
     window.addEventListener("resize", clampToViewport);
     return () => window.removeEventListener("resize", clampToViewport);
-  }, [inspectorWidth, isInspectorCollapsed, sidebarWidth]);
+  }, [inspectorWidth, isInspectorCollapsed, isSidebarCollapsed, sidebarWidth]);
 
   useEffect(() => {
     if (!isResizingSidebar) {
@@ -407,7 +458,10 @@ export function AppShell({
       setInspectorWidth(
         clampInspectorWidth(
           nextWidth,
-          getInspectorMaxWidth(bounds.width, sidebarWidth),
+          getInspectorMaxWidth(
+            bounds.width,
+            isSidebarCollapsed ? COLLAPSED_SIDEBAR_WIDTH : sidebarWidth,
+          ),
         ),
       );
     };
@@ -425,7 +479,7 @@ export function AppShell({
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", stopResizing);
     };
-  }, [isInspectorCollapsed, isResizingInspector, sidebarWidth]);
+  }, [isInspectorCollapsed, isResizingInspector, isSidebarCollapsed, sidebarWidth]);
 
   useEffect(() => {
     if (!isResizingCenter) {
@@ -462,12 +516,14 @@ export function AppShell({
   const mainStyle = useMemo(
     () =>
       ({
-        "--sidebar-width": `${sidebarWidth}px`,
+        "--sidebar-width": isSidebarCollapsed
+          ? `${COLLAPSED_SIDEBAR_WIDTH}px`
+          : `${sidebarWidth}px`,
         "--inspector-width": isInspectorCollapsed
           ? `${COLLAPSED_INSPECTOR_WIDTH}px`
           : `${inspectorWidth}px`,
       }) as CSSProperties,
-    [inspectorWidth, isInspectorCollapsed, sidebarWidth],
+    [inspectorWidth, isInspectorCollapsed, isSidebarCollapsed, sidebarWidth],
   );
 
   const centerStyle = useMemo(
@@ -486,7 +542,10 @@ export function AppShell({
     user.role === "member" ? "text-muted" : "text-accent/90";
 
   const handleResizeStart = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (typeof window !== "undefined" && window.innerWidth <= 1280) {
+    if (
+      isSidebarCollapsed ||
+      (typeof window !== "undefined" && window.innerWidth <= 1280)
+    ) {
       return;
     }
 
@@ -519,215 +578,194 @@ export function AppShell({
     setIsResizingCenter(true);
   };
 
-  return (
-    <div className="flex h-screen flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-border/60 bg-[rgb(var(--header-bg)/0.94)] px-4 py-2.5 shadow-[0_14px_32px_rgb(var(--shadow)/0.12),inset_0_-1px_0_rgb(var(--header-border)/0.42)] backdrop-blur-xl sm:px-5">
-        <div className="relative flex flex-wrap items-center justify-between gap-3 xl:flex-nowrap">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <img
-              src={httpClientLogo}
-              alt="HttpClient"
-              className="h-8 w-auto max-w-[180px] shrink-0 sm:h-9 sm:max-w-[208px]"
-            />
-            <span className="hidden h-6 w-px shrink-0 bg-border/60 sm:block" aria-hidden="true" />
-            <nav
-              className="hidden min-w-0 flex-wrap items-center gap-2.5 sm:flex"
-              aria-label="Current request context"
-            >
-              <ContextCrumb
-                icon={<Layers3 className="h-3.5 w-3.5" />}
-                label="Workspace"
-                value={activeWorkspaceName}
-                emptyLabel="Select workspace"
-              />
-              <span className="h-4 w-px shrink-0 bg-border/60" aria-hidden="true" />
-              <ContextCrumb
-                icon={<Workflow className="h-3.5 w-3.5" />}
-                label="Project"
-                value={activeProjectName}
-                emptyLabel="Select project"
-              />
-              <span className="h-4 w-px shrink-0 bg-border/60" aria-hidden="true" />
-              <ContextCrumb
-                icon={<Send className="h-3.5 w-3.5" />}
-                label="Request"
-                value={activeRequestName}
-                emptyLabel="Select request"
-                isCurrent
-              />
-            </nav>
-          </div>
+  const panelControls = useMemo(
+    () => ({
+      isSidebarCollapsed,
+      isInspectorCollapsed,
+      collapseSidebar: () => setIsSidebarCollapsed(true),
+      expandSidebar: () => setIsSidebarCollapsed(false),
+      toggleSidebar: () => setIsSidebarCollapsed((value) => !value),
+      collapseInspector: () => setIsInspectorCollapsed(true),
+      expandInspector: () => setIsInspectorCollapsed(false),
+      toggleInspector: () => setIsInspectorCollapsed((value) => !value),
+    }),
+    [isInspectorCollapsed, isSidebarCollapsed],
+  );
 
-          <div className="flex shrink-0 items-center gap-2.5">
-            <ThemeSelector
-              value={themeId}
-              onChange={onThemeChange}
-              onPreviewTheme={onThemePreview}
-              onClearPreview={onThemePreviewEnd}
-            />
-            <span className="hidden h-6 w-px shrink-0 bg-border/60 sm:block max-[900px]:hidden" aria-hidden="true" />
-            <div className="hidden items-baseline gap-2 sm:flex max-[900px]:hidden">
-              <span
-                className={cn(
-                  "text-[10px] font-semibold uppercase tracking-[0.14em]",
-                  roleLabelClassName,
-                )}
+  return (
+    <AppShellPanelControlsContext.Provider value={panelControls}>
+      <div className="flex h-screen flex-col overflow-hidden">
+        <header className="shrink-0 border-b border-border/60 bg-[rgb(var(--header-bg)/0.94)] px-4 py-2.5 shadow-[0_14px_32px_rgb(var(--shadow)/0.12),inset_0_-1px_0_rgb(var(--header-border)/0.42)] backdrop-blur-xl sm:px-5">
+          <div className="relative flex flex-wrap items-center justify-between gap-3 xl:flex-nowrap">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <img
+                src={httpClientLogo}
+                alt="HttpClient"
+                className="h-8 w-auto max-w-[180px] shrink-0 sm:h-9 sm:max-w-[208px]"
+              />
+              <span className="hidden h-6 w-px shrink-0 bg-border/60 sm:block" aria-hidden="true" />
+              <nav
+                className="hidden min-w-0 flex-wrap items-center gap-2.5 sm:flex"
+                aria-label="Current request context"
               >
-                {roleLabel}
-              </span>
-              <span className="truncate text-sm font-medium text-foreground">
-                {user.username}
-              </span>
+                <ContextCrumb
+                  icon={<Layers3 className="h-3.5 w-3.5" />}
+                  label="Workspace"
+                  value={activeWorkspaceName}
+                  emptyLabel="Select workspace"
+                />
+                <span className="h-4 w-px shrink-0 bg-border/60" aria-hidden="true" />
+                <ContextCrumb
+                  icon={<Workflow className="h-3.5 w-3.5" />}
+                  label="Project"
+                  value={activeProjectName}
+                  emptyLabel="Select project"
+                />
+                <span className="h-4 w-px shrink-0 bg-border/60" aria-hidden="true" />
+                <ContextCrumb
+                  icon={<Send className="h-3.5 w-3.5" />}
+                  label="Request"
+                  value={activeRequestName}
+                  emptyLabel="Select request"
+                  isCurrent
+                />
+              </nav>
             </div>
-            <Button
-              className="h-8 rounded-lg px-2.5"
-              variant="ghost"
-              onClick={onLogout}
-              title="Logout"
-              aria-label="Logout"
-            >
-              <LogOut className="h-4 w-4" />
-              <span className="max-[640px]:hidden">Logout</span>
-            </Button>
+
+            <div className="flex shrink-0 items-center gap-2.5">
+              <ThemeSelector
+                value={themeId}
+                onChange={onThemeChange}
+                onPreviewTheme={onThemePreview}
+                onClearPreview={onThemePreviewEnd}
+              />
+              <span className="hidden h-6 w-px shrink-0 bg-border/60 sm:block max-[900px]:hidden" aria-hidden="true" />
+              <div className="hidden items-baseline gap-2 sm:flex max-[900px]:hidden">
+                <span
+                  className={cn(
+                    "text-[10px] font-semibold uppercase tracking-[0.14em]",
+                    roleLabelClassName,
+                  )}
+                >
+                  {roleLabel}
+                </span>
+                <span className="truncate text-sm font-medium text-foreground">
+                  {user.username}
+                </span>
+              </div>
+              <Button
+                className="h-8 rounded-lg px-2.5"
+                variant="ghost"
+                onClick={onLogout}
+                title="Logout"
+                aria-label="Logout"
+              >
+                <LogOut className="h-4 w-4" />
+                <span className="max-[640px]:hidden">Logout</span>
+              </Button>
+            </div>
           </div>
-        </div>
-      </header>
-      <main
-        ref={mainRef}
-        style={mainStyle}
-        className="grid min-h-0 flex-1 grid-cols-[var(--sidebar-width)_minmax(0,1fr)_var(--inspector-width)] gap-4 overflow-hidden p-3 sm:gap-5 sm:p-5 max-[1280px]:grid-cols-1 max-[1280px]:overflow-y-auto"
-      >
-        <aside className="relative min-h-0 overflow-hidden rounded-xl">
-          {sidebar}
-          <button
-            className="group absolute inset-y-3 -right-4 flex w-8 cursor-col-resize items-center justify-center max-[1280px]:hidden"
-            onPointerDown={handleResizeStart}
-            type="button"
-            aria-label="Resize sidebar"
+        </header>
+        <main
+          ref={mainRef}
+          style={mainStyle}
+          className="grid min-h-0 flex-1 grid-cols-[var(--sidebar-width)_minmax(0,1fr)_var(--inspector-width)] gap-4 overflow-hidden p-3 sm:gap-5 sm:p-5 max-[1280px]:grid-cols-1 max-[1280px]:overflow-y-auto"
+        >
+          <aside
+            className={cn(
+              "relative min-h-0 rounded-xl",
+              isSidebarCollapsed ? "overflow-visible" : "overflow-hidden",
+            )}
           >
-            <span
-              className={cn(
-                "h-full w-px transition",
-                isResizingSidebar ? "bg-accent/80" : "bg-border/75",
-              )}
-            />
-            <span
-              className={cn(
-                "absolute left-1/2 top-1/2 h-14 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-border/60 bg-[rgb(var(--surface-3)/0.94)] opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-visible:opacity-100",
-                isResizingSidebar && "border-accent/30 bg-accent/20 opacity-100",
-              )}
-            />
-          </button>
-        </aside>
-        <section
-          ref={centerSectionRef}
-          style={centerStyle}
-          className="grid min-h-0 grid-rows-[var(--builder-height)_minmax(240px,1fr)] gap-4 overflow-hidden"
-        >
-          <div className="min-h-0 overflow-hidden rounded-xl">{builder}</div>
-          <div className="relative min-h-0 overflow-hidden rounded-xl">
-            <button
-              className="group absolute left-0 -top-4 z-10 flex h-8 w-full cursor-row-resize items-center justify-center max-[1280px]:hidden"
-              onPointerDown={handleCenterResizeStart}
-              type="button"
-              aria-label="Resize request builder and response viewer"
-            >
-              <span
-                className={cn(
-                  "h-px w-full transition",
-                  isResizingCenter ? "bg-accent/80" : "bg-border/75",
-                )}
-              />
-              <span
-                className={cn(
-                  "absolute left-1/2 top-1/2 h-2 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border border-border/60 bg-[rgb(var(--surface-3)/0.94)] opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-visible:opacity-100",
-                  isResizingCenter && "border-accent/30 bg-accent/20 opacity-100",
-                )}
-              />
-            </button>
-            {response}
-          </div>
-        </section>
-        <aside
-          className={cn(
-            "relative min-h-0 overflow-hidden rounded-[1.1rem]",
-            isInspectorCollapsed && "max-[1280px]:w-[52px] max-[1280px]:justify-self-end",
-          )}
-        >
-          {!isInspectorCollapsed ? (
-            <button
-              className="group absolute inset-y-3 -left-4 z-10 flex w-8 cursor-col-resize items-center justify-center max-[1280px]:hidden"
-              onPointerDown={handleInspectorResizeStart}
-              type="button"
-              aria-label="Resize right sidebar"
-            >
-              <span
-                className={cn(
-                  "h-full w-px transition",
-                  isResizingInspector ? "bg-accent/80" : "bg-border/75",
-                )}
-              />
-              <span
-                className={cn(
-                  "absolute left-1/2 top-1/2 h-14 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-border/60 bg-[rgb(var(--surface-3)/0.94)] opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-visible:opacity-100",
-                  isResizingInspector && "border-accent/30 bg-accent/20 opacity-100",
-                )}
-              />
-            </button>
-          ) : null}
-          <div className="relative isolate flex h-full min-h-0 overflow-hidden rounded-[1.1rem] bg-card/86 shadow-glow ring-1 ring-inset ring-border/55 backdrop-blur-xl">
-            <div
-              className={cn(
-                "min-w-0 flex-1 overflow-hidden transition-[width,opacity] duration-200",
-                isInspectorCollapsed
-                  ? "w-0 opacity-0"
-                  : "w-[calc(100%-52px)] opacity-100",
-              )}
-            >
-              {!isInspectorCollapsed ? (
-                <div className="h-full overflow-y-auto p-3">{inspector}</div>
-              ) : null}
-            </div>
-            <div
-              className={cn(
-                "flex w-[52px] shrink-0 flex-col items-center gap-3 bg-[rgb(var(--surface-2)/0.56)] px-2 py-3",
-                !isInspectorCollapsed && "border-l border-border/40",
-              )}
-            >
+            {!isSidebarCollapsed ? (
+              <>
+                {sidebar}
+                <button
+                  className="group absolute inset-y-3 -right-4 flex w-8 cursor-col-resize items-center justify-center max-[1280px]:hidden"
+                  onPointerDown={handleResizeStart}
+                  type="button"
+                  aria-label="Resize sidebar"
+                >
+                  <span
+                    className={cn(
+                      "h-full w-px transition",
+                      isResizingSidebar ? "bg-accent/80" : "bg-border/75",
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "absolute left-1/2 top-1/2 h-14 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-border/60 bg-[rgb(var(--surface-3)/0.94)] opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-visible:opacity-100",
+                      isResizingSidebar && "border-accent/30 bg-accent/20 opacity-100",
+                    )}
+                  />
+                </button>
+              </>
+            ) : null}
+          </aside>
+          <section
+            ref={centerSectionRef}
+            style={centerStyle}
+            className="grid min-h-0 grid-rows-[var(--builder-height)_minmax(240px,1fr)] gap-4 overflow-hidden"
+          >
+            <div className="min-h-0 overflow-hidden rounded-xl">{builder}</div>
+            <div className="relative min-h-0 overflow-hidden rounded-xl">
               <button
-                className="flex h-8 w-8 items-center justify-center rounded-full border border-border/55 bg-[rgb(var(--surface-1)/0.74)] text-muted transition hover:bg-[rgb(var(--surface-2)/0.84)] hover:text-foreground"
-                onClick={() => setIsInspectorCollapsed((value) => !value)}
+                className="group absolute left-0 -top-4 z-10 flex h-8 w-full cursor-row-resize items-center justify-center max-[1280px]:hidden"
+                onPointerDown={handleCenterResizeStart}
                 type="button"
-                aria-label={
-                  isInspectorCollapsed
-                    ? "Expand right sidebar"
-                    : "Collapse right sidebar"
-                }
-                title={
-                  isInspectorCollapsed
-                    ? "Expand right sidebar"
-                    : "Collapse right sidebar"
-                }
+                aria-label="Resize request builder and response viewer"
               >
-                {isInspectorCollapsed ? (
-                  <ChevronLeft className="h-4 w-4" />
-                ) : (
-                  <ChevronRight className="h-4 w-4" />
-                )}
+                <span
+                  className={cn(
+                    "h-px w-full transition",
+                    isResizingCenter ? "bg-accent/80" : "bg-border/75",
+                  )}
+                />
+                <span
+                  className={cn(
+                    "absolute left-1/2 top-1/2 h-2 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border border-border/60 bg-[rgb(var(--surface-3)/0.94)] opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-visible:opacity-100",
+                    isResizingCenter && "border-accent/30 bg-accent/20 opacity-100",
+                  )}
+                />
               </button>
-              <span className="text-[10px] uppercase tracking-[0.24em] text-muted [writing-mode:vertical-rl]">
-                Tools
-              </span>
+              {response}
             </div>
-          </div>
-        </aside>
-      </main>
-    </div>
+          </section>
+          <aside
+            className={cn(
+              "relative min-h-0 rounded-[1.1rem]",
+              isInspectorCollapsed ? "overflow-visible" : "overflow-hidden",
+            )}
+          >
+            {!isInspectorCollapsed ? (
+              <>
+                <button
+                  className="group absolute inset-y-3 -left-4 z-10 flex w-8 cursor-col-resize items-center justify-center max-[1280px]:hidden"
+                  onPointerDown={handleInspectorResizeStart}
+                  type="button"
+                  aria-label="Resize right sidebar"
+                >
+                  <span
+                    className={cn(
+                      "h-full w-px transition",
+                      isResizingInspector ? "bg-accent/80" : "bg-border/75",
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "absolute left-1/2 top-1/2 h-14 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-border/60 bg-[rgb(var(--surface-3)/0.94)] opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-visible:opacity-100",
+                      isResizingInspector && "border-accent/30 bg-accent/20 opacity-100",
+                    )}
+                  />
+                </button>
+                <div className="relative isolate flex h-full min-h-0 overflow-hidden rounded-[1.1rem] bg-card/86 shadow-glow ring-1 ring-inset ring-border/55 backdrop-blur-xl">
+                  <div className="h-full min-h-0 flex-1 overflow-y-auto p-3">{inspector}</div>
+                </div>
+              </>
+            ) : null}
+          </aside>
+        </main>
+      </div>
+    </AppShellPanelControlsContext.Provider>
   );
 }
-
-
-
-
-
-

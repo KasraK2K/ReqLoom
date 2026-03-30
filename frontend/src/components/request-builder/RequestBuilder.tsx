@@ -1,5 +1,5 @@
 import type { ExecuteRequestPayload, ProjectEnvVar, RequestDoc } from "@restify/shared";
-import { Save, TerminalSquare } from "lucide-react";
+import { ChevronLeft, ChevronRight, Save, TerminalSquare } from "lucide-react";
 import { useMemo } from "react";
 import { useCtrlEnter } from "../../hooks/use-ctrl-enter";
 import { buildCurlCommand } from "../../lib/curl";
@@ -12,6 +12,7 @@ import {
   resolveVariables,
 } from "../../lib/var-resolver";
 import type { BuilderTab } from "../../types";
+import { useAppShellPanels } from "../layout/AppShell";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
@@ -44,6 +45,7 @@ export function RequestBuilder({
   onCancel,
   onSend,
 }: RequestBuilderProps) {
+  const panelControls = useAppShellPanels();
   const resolution = useMemo(
     () => resolveVariables(draft?.url ?? "", envVars),
     [draft?.url, envVars],
@@ -63,22 +65,17 @@ export function RequestBuilder({
     }
   }, Boolean(sendPayload) && !isSending);
 
-  if (!draft) {
-    return (
-      <Card className="flex h-full min-h-0 flex-col">
-        <CardContent className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted">
-          Select or create a request to start building.
-        </CardContent>
-      </Card>
-    );
-  }
+  const updateDraft = (patch: Partial<RequestDoc>) => {
+    if (!draft) {
+      return;
+    }
 
-  const updateDraft = (patch: Partial<RequestDoc>) =>
     onDraftChange({
       ...draft,
       ...patch,
       updatedAt: new Date().toISOString(),
     });
+  };
 
   const copyCurl = async () => {
     if (!sendPayload) {
@@ -99,11 +96,62 @@ export function RequestBuilder({
     }
   };
 
-  return (
-    <Card className="flex h-full min-h-0 flex-col overflow-hidden">
-      <CardHeader>
-        <CardTitle>Request Builder</CardTitle>
-        <div className="flex items-center gap-1.5 shrink-0">
+  const headerLeft = (
+    <div className="flex min-w-0 items-center gap-2">
+      {panelControls ? (
+        <Button
+          variant="ghost"
+          className="h-8 w-8 rounded-lg p-0"
+          onClick={panelControls.toggleSidebar}
+          aria-label={
+            panelControls.isSidebarCollapsed
+              ? "Expand left sidebar"
+              : "Collapse left sidebar"
+          }
+          title={
+            panelControls.isSidebarCollapsed
+              ? "Expand left sidebar"
+              : "Collapse left sidebar"
+          }
+        >
+          {panelControls.isSidebarCollapsed ? (
+            <ChevronRight className="h-4 w-4" />
+          ) : (
+            <ChevronLeft className="h-4 w-4" />
+          )}
+        </Button>
+      ) : null}
+      <CardTitle>Request Builder</CardTitle>
+    </div>
+  );
+
+  const headerRight = (
+    <div className="flex items-center gap-1.5 shrink-0">
+      {panelControls ? (
+        <Button
+          variant="ghost"
+          className="h-8 w-8 rounded-lg p-0"
+          onClick={panelControls.toggleInspector}
+          aria-label={
+            panelControls.isInspectorCollapsed
+              ? "Expand right sidebar"
+              : "Collapse right sidebar"
+          }
+          title={
+            panelControls.isInspectorCollapsed
+              ? "Expand right sidebar"
+              : "Collapse right sidebar"
+          }
+        >
+          {panelControls.isInspectorCollapsed ? (
+            <ChevronLeft className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+        </Button>
+      ) : null}
+      {draft ? (
+        <>
           <Button
             variant="ghost"
             className="h-8 w-8 rounded-lg p-0"
@@ -123,7 +171,30 @@ export function RequestBuilder({
           >
             <Save className="h-4 w-4" />
           </Button>
-        </div>
+        </>
+      ) : null}
+    </div>
+  );
+
+  if (!draft) {
+    return (
+      <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+        <CardHeader>
+          {headerLeft}
+          {headerRight}
+        </CardHeader>
+        <CardContent className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted">
+          Select or create a request to start building.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+      <CardHeader>
+        {headerLeft}
+        {headerRight}
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
         <div className="flex min-w-0 flex-col items-stretch gap-3 min-[860px]:flex-row min-[860px]:items-start">
@@ -197,3 +268,4 @@ export function RequestBuilder({
     </Card>
   );
 }
+
