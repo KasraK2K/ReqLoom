@@ -1735,8 +1735,8 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
   }
 
   return (
-    <Card className="h-full overflow-hidden">
-      <CardHeader className="px-3 py-2">
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden">
+      <CardHeader className="shrink-0 px-3 py-2">
         <div className="flex w-full items-center justify-between gap-2">
           <CardTitle>Collections</CardTitle>
           {canCreateWorkspace ? (
@@ -1750,7 +1750,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
           ) : null}
         </div>
       </CardHeader>
-      <CardContent className="overflow-y-auto p-1.5 pl-4">
+      <CardContent className="min-h-0 flex-1 overflow-y-auto p-1.5 pl-4">
         <DndContext
           sensors={sensors}
           collisionDetection={collisionDetection}
