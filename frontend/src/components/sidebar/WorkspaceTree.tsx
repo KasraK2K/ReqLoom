@@ -1581,10 +1581,10 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                         <button
                           className="rounded-md p-0.5 text-muted transition hover:bg-white/8 hover:text-foreground"
                           onClick={() =>
-                            setExpandedFolders((state) => ({
-                              ...state,
-                              [folder._id]: !isExpandedFolder,
-                            }))
+                            setFolderExpansionState(
+                              [folder._id],
+                              !isExpandedFolder,
+                            )
                           }
                           type="button"
                           aria-label={
@@ -1609,7 +1609,17 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                             )
                           }
                         />
-                        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                        <button
+                          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                          onClick={() =>
+                            setFolderExpansionState(
+                              [folder._id],
+                              !isExpandedFolder,
+                            )
+                          }
+                          type="button"
+                          title={folder.name}
+                        >
                           <span className="shrink-0">
                             {isExpandedFolder ? (
                               <Folder className="h-3.5 w-3.5 text-amber-300" />
@@ -1617,13 +1627,10 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                               <FolderClosed className="h-3.5 w-3.5 text-amber-300" />
                             )}
                           </span>
-                          <span
-                            className="min-w-0 flex-1 truncate text-[13px] leading-5 text-foreground"
-                            title={folder.name}
-                          >
+                          <span className="min-w-0 flex-1 truncate text-[13px] leading-5 text-foreground">
                             {folder.name}
                           </span>
-                        </div>
+                        </button>
                       </div>
                       {!isDragging ? (
                         <ContextMenus
@@ -1798,10 +1805,10 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                       <button
                         className="rounded-md p-0.5 text-muted transition hover:bg-white/8 hover:text-foreground"
                         onClick={() =>
-                          setExpandedWorkspaces((state) => ({
-                            ...state,
-                            [workspace._id]: !isExpandedWorkspace,
-                          }))
+                          setWorkspaceExpansionState(
+                            [workspace._id],
+                            !isExpandedWorkspace,
+                          )
                         }
                         type="button"
                         aria-label={
@@ -1838,7 +1845,10 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                       <button
                         className="min-w-0 flex-1 text-left"
                         onClick={() => {
-                          setWorkspaceExpansionState([workspace._id], true);
+                          setWorkspaceExpansionState(
+                            [workspace._id],
+                            !isExpandedWorkspace,
+                          );
                           onSelectWorkspace(workspace._id);
                         }}
                         type="button"
@@ -1930,10 +1940,10 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                                     <button
                                       className="rounded-md p-0.5 text-muted transition hover:bg-white/8 hover:text-foreground"
                                       onClick={() =>
-                                        setExpandedProjects((state) => ({
-                                          ...state,
-                                          [project._id]: !isExpandedProject,
-                                        }))
+                                        setProjectExpansionState(
+                                          [project._id],
+                                          !isExpandedProject,
+                                        )
                                       }
                                       type="button"
                                       aria-label={
@@ -1963,28 +1973,30 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                                         );
                                       }}
                                     />
-                                    <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                                    <button
+                                      className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                                      onClick={() => {
+                                        setProjectExpansionState(
+                                          [project._id],
+                                          !isExpandedProject,
+                                        );
+                                        onSelectProject(project._id);
+                                      }}
+                                      type="button"
+                                      title={project.name}
+                                    >
                                       <span className="shrink-0">
                                         <Workflow className="h-3.5 w-3.5 text-sky-300" />
                                       </span>
-                                      <button
+                                      <span
                                         className={cn(
-                                          "min-w-0 flex-1 truncate text-left text-[13px] leading-5 text-foreground",
+                                          "min-w-0 flex-1 truncate text-[13px] leading-5 text-foreground",
                                           project._id === activeProjectId && "font-medium",
                                         )}
-                                        onClick={() => {
-                                          setExpandedProjects((state) => ({
-                                            ...state,
-                                            [project._id]: true,
-                                          }));
-                                          onSelectProject(project._id);
-                                        }}
-                                        type="button"
-                                        title={project.name}
                                       >
                                         {project.name}
-                                      </button>
-                                    </div>
+                                      </span>
+                                    </button>
                                   </div>
                                   {!isDragging ? (
                                     <ContextMenus
