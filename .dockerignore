@@ -1,0 +1,17 @@
+.git
+.claude
+node_modules
+backend/node_modules
+frontend/node_modules
+shared/node_modules
+backend/dist
+frontend/dist
+shared/dist
+backup
+*.log
+root-dev.out
+root-dev.err
+backend-start.out
+backend-start.err
+backend-dev-trace.out
+backend-dev-trace.err

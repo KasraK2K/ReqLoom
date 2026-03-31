@@ -10,3 +10,5 @@ coverage
 backend/dist
 frontend/dist
 shared/dist
+backup/*
+!backup/.gitkeep
