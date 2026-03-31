@@ -68,6 +68,28 @@ Optional Docker env overrides from `.env`:
 - `DOCKER_FRONTEND_ORIGIN` overrides the browser origin allowed by the production container
 - `DOCKER_MONGODB_BACKUP_URI` overrides the MongoDB URI used by `mongodump` inside the container
 
+## Nginx on a server
+
+If you want to put the Docker app behind Nginx on a server, start with the sample file at `./nginx.httpclient.conf.sample`, replace `<domain>`, then move it into `/etc/nginx/sites-available/`, link it into `/etc/nginx/sites-enabled/`, and let Certbot add the TLS section.
+
+The sample is written so:
+
+- `https://<domain>/` serves the frontend
+- `https://<domain>/api/...` reaches the backend API
+
+Recommended `.env` values for a single-domain HTTPS deploy:
+
+```env
+APP_PORT=3500
+DOCKER_FRONTEND_ORIGIN=https://<domain>
+COOKIE_SECURE=true
+COOKIE_DOMAIN=
+```
+
+Leave `COOKIE_DOMAIN` empty if the app will only be served from one host name. Set it to your domain only if you specifically need a wider cookie scope.
+
+In the current Docker setup, both Nginx locations still proxy to `127.0.0.1:3500` because the app container serves the built frontend and the `/api/*` routes from the same process. The path split is still useful because it matches how the frontend already calls the API with `/api`.
+
 ## Production build
 
 - `npm run build`
