@@ -12,3 +12,4 @@ frontend/dist
 shared/dist
 backup/*
 !backup/.gitkeep
+desktop/.generated/app-config.json

@@ -1,0 +1,52 @@
+{
+  "name": "@restify/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop shell for hosted HttpClient deployments.",
+  "author": "HttpClient",
+  "type": "module",
+  "main": "src/main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --publish never"
+  },
+  "build": {
+    "appId": "com.restify.httpclient.desktop",
+    "productName": "HttpClient",
+    "asar": true,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      ".generated/**/*",
+      "package.json"
+    ],
+    "artifactName": "HttpClient-${version}-${os}-${arch}.${ext}",
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^35.2.0",
+    "electron-builder": "^25.1.8"
+  }
+}

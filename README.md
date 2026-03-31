@@ -4,6 +4,7 @@ HttpClient is a browser-based REST API client built as a multi-package repo with
 
 - `frontend/`: React + TypeScript + Vite + Tailwind
 - `backend/`: Fastify + MongoDB + JWT cookie auth
+- `desktop/`: Electron wrapper that opens a deployed HttpClient domain
 - `shared/`: shared TypeScript contracts used by both apps
 
 ## Local development
@@ -20,7 +21,29 @@ The frontend dev server uses `127.0.0.1` and starts at port `3030` because some 
 
 The backend now defaults to port `3500` and the frontend proxy reads the same `BACKEND_PORT` value from the shared env file. In development, a legacy `PORT=4000` setting is also remapped to `3500` so older local env files do not keep hitting the Windows `EACCES` socket restriction on port `4000`.
 
-The root install bootstraps `shared/`, `backend/`, and `frontend/` automatically, so it works even on npm versions that do not support the `workspace:*` protocol.
+The root install bootstraps `shared/`, `backend/`, `frontend/`, and `desktop/` automatically, so it works even on npm versions that do not support the `workspace:*` protocol.
+
+## Desktop Apps
+
+Build a desktop app that connects to your deployed server domain with:
+
+- `npm run desktop:build`
+- `npm run desktop:build:win`
+- `npm run desktop:build:linux`
+- `npm run desktop:build:mac`
+
+Each command asks for the domain to open, like `https://api.example.com`, then packages a desktop shell into `desktop/dist`.
+
+You can also skip the prompt and pass the domain directly:
+
+- `npm run desktop:build -- --domain=https://api.example.com`
+
+Platform notes:
+
+- `desktop:build` targets the current operating system automatically
+- Windows builds work best on Windows
+- Linux builds work best on Linux
+- macOS builds usually need to run on macOS
 
 ## Docker stack
 
