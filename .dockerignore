@@ -9,9 +9,6 @@ frontend/dist
 shared/dist
 backup
 *.log
-root-dev.out
-root-dev.err
-backend-start.out
-backend-start.err
-backend-dev-trace.out
-backend-dev-trace.err
+logs
+*.out
+*.err

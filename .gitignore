@@ -12,4 +12,8 @@ frontend/dist
 shared/dist
 backup/*
 !backup/.gitkeep
+logs/*
+!logs/.gitkeep
+*.out
+*.err
 desktop/.generated/app-config.json

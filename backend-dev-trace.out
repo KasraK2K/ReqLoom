@@ -1,5 +1,0 @@
-
-> @restify/backend@0.1.0 dev
-> tsx watch src/index.ts
-
-{"level":50,"time":1774369203564,"pid":12256,"hostname":"DESKTOP-8R9F4HN","err":{"type":"Error","message":"listen EADDRINUSE: address already in use 0.0.0.0:4000","stack":"Error: listen EADDRINUSE: address already in use 0.0.0.0:4000\n    at Server.setupListenHandle [as _listen2] (node:net:1948:16)\n    at listenInCluster (node:net:2005:12)\n    at node:net:2214:7\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)","code":"EADDRINUSE","errno":-4091,"syscall":"listen","address":"0.0.0.0","port":4000},"msg":"listen EADDRINUSE: address already in use 0.0.0.0:4000"}
