@@ -1124,7 +1124,7 @@ export default function App() {
         <TabsList className="mb-4 flex w-full flex-wrap justify-start gap-1">
           <TabsTrigger
             value="environment"
-            className="inline-flex h-9 w-9 items-center justify-center p-0"
+            className="inline-flex h-9 w-9 items-center justify-center p-0 shadow-none"
             aria-label="Environment"
             title="Environment"
           >
@@ -1132,7 +1132,7 @@ export default function App() {
           </TabsTrigger>
           <TabsTrigger
             value="history"
-            className="inline-flex h-9 w-9 items-center justify-center p-0"
+            className="inline-flex h-9 w-9 items-center justify-center p-0 shadow-none"
             aria-label="History"
             title="History"
           >
@@ -1140,7 +1140,7 @@ export default function App() {
           </TabsTrigger>
           <TabsTrigger
             value="account"
-            className="inline-flex h-9 w-9 items-center justify-center p-0"
+            className="inline-flex h-9 w-9 items-center justify-center p-0 shadow-none"
             aria-label="Account"
             title="Account"
           >
@@ -1149,7 +1149,7 @@ export default function App() {
           {currentUser.role === "superadmin" ? (
             <TabsTrigger
               value="admin"
-              className="inline-flex h-9 w-9 items-center justify-center p-0"
+              className="inline-flex h-9 w-9 items-center justify-center p-0 shadow-none"
               aria-label="Admin"
               title="Admin"
             >
@@ -1168,7 +1168,7 @@ export default function App() {
           />
         </TabsContent>
         <TabsContent value="history">
-          <Card>
+          <Card className="shadow-none">
             <CardHeader>
               <CardTitle>Request History</CardTitle>
             </CardHeader>
@@ -1438,6 +1438,9 @@ export default function App() {
     </>
   );
 }
+
+
+
 
 
 

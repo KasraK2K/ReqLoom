@@ -312,3 +312,7 @@ textarea {
   border-left-color: var(--editor-caret);
 }
 
+
+.flat-inspector [class*="shadow-"] {
+  box-shadow: none !important;
+}

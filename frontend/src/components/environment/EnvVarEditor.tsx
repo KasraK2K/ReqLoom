@@ -1,4 +1,4 @@
-import type { ProjectEnvVar } from "@restify/shared";
+﻿import type { ProjectEnvVar } from "@restify/shared";
 import { Plus, Save, Trash2 } from "lucide-react";
 import { useRef } from "react";
 import { Button } from "../ui/button";
@@ -49,7 +49,7 @@ export function EnvVarEditor({
   };
 
   return (
-    <Card>
+    <Card className="shadow-none">
       <CardHeader>
         <div>
           <CardTitle>Environment</CardTitle>
@@ -134,3 +134,4 @@ export function EnvVarEditor({
     </Card>
   );
 }
+

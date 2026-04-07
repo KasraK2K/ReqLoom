@@ -116,7 +116,7 @@ export function AccountSettings({
 
   return (
     <div className="space-y-4">
-      <Card>
+      <Card className="shadow-none">
         <CardHeader className="items-start">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-muted">
@@ -155,7 +155,7 @@ export function AccountSettings({
             </div>
           </div>
           <Button
-            className="h-10 w-full justify-center"
+            className="h-10 w-full justify-center shadow-none"
             onClick={() => void handleProfileSave()}
             disabled={isSavingProfile || !trimmedName || !profileChanged}
           >
@@ -164,7 +164,7 @@ export function AccountSettings({
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="shadow-none">
         <CardHeader className="items-start">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-muted">
@@ -214,7 +214,7 @@ export function AccountSettings({
             </div>
           </div>
           <Button
-            className="h-10 w-full justify-center"
+            className="h-10 w-full justify-center shadow-none"
             onClick={() => void handlePasswordSave()}
             disabled={isSavingPassword || !currentPassword || !newPassword || !confirmPassword}
           >
@@ -225,4 +225,6 @@ export function AccountSettings({
     </div>
   );
 }
+
+
 

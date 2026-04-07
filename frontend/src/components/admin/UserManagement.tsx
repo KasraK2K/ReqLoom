@@ -421,7 +421,7 @@ export function UserManagement({
             </div>
 
             <Button
-              className="h-10 w-full justify-center"
+              className="h-10 w-full justify-center shadow-none"
               onClick={() => void handleCreate()}
               disabled={isCreating || !name || !username || !password || !confirmPassword}
             >
@@ -606,5 +606,6 @@ export function UserManagement({
     </>
   );
 }
+
 
 
