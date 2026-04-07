@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="frontend/src/assets/httpclient-logo.svg" alt="HttpClient logo" width="180" />
+</p>
+
 # HttpClient
 
 HttpClient is a browser-based REST API client built as a multi-package repo with:
