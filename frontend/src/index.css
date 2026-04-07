@@ -313,6 +313,3 @@ textarea {
 }
 
 
-.flat-inspector [class*="shadow-"] {
-  box-shadow: none !important;
-}

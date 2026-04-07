@@ -762,7 +762,7 @@ export function AppShell({
                   />
                 </button>
                 <div className="relative isolate flex h-full min-h-0 overflow-hidden rounded-[1.1rem] bg-card/86 shadow-none ring-1 ring-inset ring-border/55 backdrop-blur-xl">
-                  <div className="flat-inspector h-full min-h-0 flex-1 overflow-y-auto p-3">{inspector}</div>
+                  <div className="h-full min-h-0 flex-1 overflow-y-auto p-3">{inspector}</div>
                 </div>
               </>
             ) : null}
@@ -772,6 +772,7 @@ export function AppShell({
     </AppShellPanelControlsContext.Provider>
   );
 }
+
 
 
 
