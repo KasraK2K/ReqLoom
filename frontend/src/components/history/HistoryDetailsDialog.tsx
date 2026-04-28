@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { HistoryDoc } from "@restify/shared";
-import { TerminalSquare } from "lucide-react";
+import { Copy, TerminalSquare } from "lucide-react";
 import { METHOD_STYLES } from "../../lib/methods";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -19,6 +19,8 @@ interface DetailSectionProps {
   actions?: ReactNode;
   children: ReactNode;
 }
+
+type HistoryResponseSnapshot = NonNullable<HistoryDoc["responseSnapshot"]>;
 
 function DetailSection({
   title,
@@ -72,6 +74,23 @@ function formatBodyTypeLabel(
   }
 }
 
+function formatContentKindLabel(type: HistoryResponseSnapshot["contentKind"]) {
+  switch (type) {
+    case "json":
+      return "JSON";
+    case "html":
+      return "HTML";
+    case "xml":
+      return "XML";
+    case "image":
+      return "Image";
+    case "binary":
+      return "Binary";
+    default:
+      return "Text";
+  }
+}
+
 function formatBytes(sizeBytes: number) {
   if (sizeBytes < 1024) {
     return `${sizeBytes} B`;
@@ -84,16 +103,20 @@ function formatBytes(sizeBytes: number) {
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function renderEmptyDetail(message: string) {
+  return (
+    <div className="rounded-xl border border-dashed border-border/55 bg-[rgb(var(--surface-1)/0.58)] px-4 py-6 text-sm text-muted">
+      {message}
+    </div>
+  );
+}
+
 function renderKeyValueList(
   items: Array<{ key: string; value: string; meta?: string }>,
   emptyLabel: string,
 ) {
   if (items.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed border-border/55 bg-[rgb(var(--surface-1)/0.58)] px-4 py-6 text-sm text-muted">
-        {emptyLabel}
-      </div>
-    );
+    return renderEmptyDetail(emptyLabel);
   }
 
   return (
@@ -179,6 +202,38 @@ function getBodyCopyValue(
   }
 }
 
+function getResponseBodyValue(response?: HistoryResponseSnapshot) {
+  return response?.textBody ?? "";
+}
+
+function renderResponseBody(response: HistoryResponseSnapshot) {
+  const bodyValue = getResponseBodyValue(response);
+
+  if (!bodyValue) {
+    return renderEmptyDetail(
+      response.contentKind === "binary" || response.contentKind === "image"
+        ? "Binary and image response bodies are not saved in history."
+        : "The response body was empty.",
+    );
+  }
+
+  if (response.contentKind === "json") {
+    return (
+      <JSONTree
+        value={bodyValue}
+        scrollable={false}
+        className="border border-border/45 text-xs"
+      />
+    );
+  }
+
+  return (
+    <pre className="code-surface rounded-xl border border-border/45 p-4 font-mono text-xs whitespace-pre-wrap break-all">
+      {bodyValue}
+    </pre>
+  );
+}
+
 export function HistoryDetailsDialog({
   entry,
   open,
@@ -189,6 +244,7 @@ export function HistoryDetailsDialog({
   }
 
   const snapshot = entry.requestSnapshot;
+  const responseSnapshot = entry.responseSnapshot;
   const sentHeaders = snapshot
     ? Object.entries(snapshot.computedHeaders).map(([key, value]) => ({
         key,
@@ -211,6 +267,8 @@ export function HistoryDetailsDialog({
     : [];
   const bodyCopyValue = snapshot ? getBodyCopyValue(snapshot) : "";
   const canCopyBody = Boolean(bodyCopyValue);
+  const responseCopyValue = getResponseBodyValue(responseSnapshot);
+  const canCopyResponse = Boolean(responseCopyValue);
 
   const copyBody = async () => {
     if (!canCopyBody) {
@@ -219,6 +277,18 @@ export function HistoryDetailsDialog({
 
     try {
       await navigator.clipboard.writeText(bodyCopyValue);
+    } catch {
+      return;
+    }
+  };
+
+  const copyResponse = async () => {
+    if (!canCopyResponse) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(responseCopyValue);
     } catch {
       return;
     }
@@ -379,6 +449,41 @@ export function HistoryDetailsDialog({
               </DetailSection>
             </>
           )}
+
+          <DetailSection
+            title="Response"
+            description="Saved response body from this execution."
+            actions={
+              responseSnapshot ? (
+                <Button
+                  variant="secondary"
+                  className="h-8 w-8 rounded-lg p-0"
+                  onClick={() => void copyResponse()}
+                  disabled={!canCopyResponse}
+                  aria-label="Copy response body"
+                  title="Copy response body"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+              ) : null
+            }
+          >
+            {responseSnapshot ? (
+              <>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge>{formatContentKindLabel(responseSnapshot.contentKind)}</Badge>
+                  <Badge className="max-w-full break-all text-left">
+                    {responseSnapshot.contentType}
+                  </Badge>
+                </div>
+                {renderResponseBody(responseSnapshot)}
+              </>
+            ) : (
+              renderEmptyDetail(
+                "No response body was saved for this history item. Run the request again to capture it.",
+              )
+            )}
+          </DetailSection>
         </div>
       </div>
     </Dialog>

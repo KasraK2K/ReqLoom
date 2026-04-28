@@ -1,6 +1,7 @@
 import type {
   AdminUser,
   ExecuteRequestPayload,
+  ExecuteRequestResult,
   FolderDoc,
   HistoryDoc,
   ProjectDoc,
@@ -327,6 +328,21 @@ function buildHistoryRequestSnapshot(
     computedHeaders: Object.fromEntries(computedHeaders.entries()),
     secretsRedacted: true,
   });
+}
+
+function buildHistoryResponseSnapshot(
+  result: ExecuteRequestResult,
+): NonNullable<HistoryDoc["responseSnapshot"]> {
+  const snapshot: NonNullable<HistoryDoc["responseSnapshot"]> = {
+    contentType: result.contentType,
+    contentKind: result.contentKind,
+  };
+
+  if (result.textBody !== undefined) {
+    snapshot.textBody = result.textBody;
+  }
+
+  return snapshot;
 }
 
 const requestRoutes: FastifyPluginAsync = async (app) => {
@@ -1405,6 +1421,7 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
         durationMs: result.durationMs,
         sizeBytes: result.sizeBytes,
         requestSnapshot: buildHistoryRequestSnapshot(request.body),
+        responseSnapshot: buildHistoryResponseSnapshot(result),
         createdAt: now,
         updatedAt: now,
       };

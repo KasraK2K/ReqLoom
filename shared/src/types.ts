@@ -146,6 +146,12 @@ export interface HistoryRequestSnapshot {
   secretsRedacted?: boolean;
 }
 
+export interface HistoryResponseSnapshot {
+  contentType: string;
+  contentKind: ContentKind;
+  textBody?: string;
+}
+
 export interface RequestDoc extends Timestamped {
   _id: string;
   entityType: "request";
@@ -176,6 +182,7 @@ export interface HistoryDoc extends Timestamped {
   durationMs: number;
   sizeBytes: number;
   requestSnapshot?: HistoryRequestSnapshot;
+  responseSnapshot?: HistoryResponseSnapshot;
 }
 
 export interface FolderTree extends FolderDoc {
