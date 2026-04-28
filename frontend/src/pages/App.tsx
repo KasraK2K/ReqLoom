@@ -1,4 +1,5 @@
 ﻿import type { HistoryDoc, RequestDoc, User } from "@restify/shared";
+import type { ExecuteRequestResult } from "@restify/shared";
 import { Activity, CircleUserRound, FileText, Settings2, Users } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CreateSuperuserPage } from "../components/auth/CreateSuperuserPage";
@@ -70,6 +71,32 @@ function reportError(error: unknown) {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
+}
+
+function buildResponseFromHistory(
+  entry: HistoryDoc,
+): ExecuteRequestResult | null {
+  const snapshot = entry.responseSnapshot;
+  if (!snapshot) {
+    return null;
+  }
+
+  const response: ExecuteRequestResult = {
+    status: entry.status,
+    statusText: snapshot.statusText ?? "",
+    headers: snapshot.headers ?? {},
+    cookies: snapshot.cookies ?? [],
+    durationMs: entry.durationMs,
+    sizeBytes: entry.sizeBytes,
+    contentType: snapshot.contentType,
+    contentKind: snapshot.contentKind,
+  };
+
+  if (snapshot.textBody !== undefined) {
+    response.textBody = snapshot.textBody;
+  }
+
+  return response;
 }
 
 type CreateDialogState =
@@ -148,6 +175,7 @@ export default function App() {
   const {
     draft,
     response,
+    responseRequestId,
     isSending,
     activeTab,
     setDraft,
@@ -239,6 +267,18 @@ export default function App() {
   const activeHistory = activeProject
     ? historyByProject[activeProject._id] ?? []
     : [];
+  const latestActiveRequestResponse = useMemo(() => {
+    if (!activeRequestId) {
+      return null;
+    }
+
+    const latestEntry = activeHistory.find(
+      (entry) => entry.requestId === activeRequestId && entry.responseSnapshot,
+    );
+    return latestEntry ? buildResponseFromHistory(latestEntry) : null;
+  }, [activeHistory, activeRequestId]);
+  const visibleResponse =
+    activeRequestId && responseRequestId === activeRequestId ? response : null;
   const activeProjectEnvVars = activeProject
     ? getEnvVars(activeProject._id)
     : [];
@@ -289,6 +329,15 @@ export default function App() {
       .then(({ history }) => setHistory(activeProject._id, history))
       .catch(() => undefined);
   }, [activeProject, setEnvVars, setHistory]);
+
+  useEffect(() => {
+    if (!activeRequestId) {
+      setResponse(null);
+      return;
+    }
+
+    setResponse(latestActiveRequestResponse, activeRequestId);
+  }, [activeRequestId, latestActiveRequestResponse, setResponse]);
 
   useEffect(() => {
     setDraft(activeRequest ? structuredClone(activeRequest) : null);
@@ -920,7 +969,7 @@ export default function App() {
     setSending(true);
     try {
       const result = await api.execute(payload, abortController.signal);
-      setResponse(result);
+      setResponse(result, payload.requestId);
       if (activeProject) {
         const { history } = await api.getProjectHistory(
           activeProject._id,
@@ -1395,7 +1444,7 @@ export default function App() {
             onSend={(payload) => sendRequest(payload).catch(reportError)}
           />
         }
-        response={<ResponseViewer response={response} />}
+        response={<ResponseViewer response={visibleResponse} />}
         inspector={<InspectorPanel />}
       />
       {createDialogConfig ? (

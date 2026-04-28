@@ -29,6 +29,7 @@ import {
 import {
   protectRequestAuthForStorage,
   protectRequestHeadersForStorage,
+  redactComputedHeadersForHistory,
   revealProjectEnvVarsFromStorage,
   revealRequestAuthFromStorage,
   revealRequestHeadersFromStorage,
@@ -334,6 +335,8 @@ function buildHistoryResponseSnapshot(
   result: ExecuteRequestResult,
 ): NonNullable<HistoryDoc["responseSnapshot"]> {
   const snapshot: NonNullable<HistoryDoc["responseSnapshot"]> = {
+    statusText: result.statusText,
+    headers: redactComputedHeadersForHistory(result.headers),
     contentType: result.contentType,
     contentKind: result.contentKind,
   };

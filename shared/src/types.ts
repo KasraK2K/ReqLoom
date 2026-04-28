@@ -147,6 +147,9 @@ export interface HistoryRequestSnapshot {
 }
 
 export interface HistoryResponseSnapshot {
+  statusText?: string;
+  headers?: Record<string, string>;
+  cookies?: ExecuteResponseCookie[];
   contentType: string;
   contentKind: ContentKind;
   textBody?: string;

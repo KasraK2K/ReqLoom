@@ -5,11 +5,15 @@ import type { BuilderTab } from "../types";
 interface ActiveRequestState {
   draft: RequestDoc | null;
   response: ExecuteRequestResult | null;
+  responseRequestId?: string;
   isSending: boolean;
   activeTab: BuilderTab;
   setDraft: (draft: RequestDoc | null) => void;
   patchDraft: (patch: Partial<RequestDoc>) => void;
-  setResponse: (response: ExecuteRequestResult | null) => void;
+  setResponse: (
+    response: ExecuteRequestResult | null,
+    requestId?: string,
+  ) => void;
   setSending: (isSending: boolean) => void;
   setActiveTab: (tab: BuilderTab) => void;
 }
@@ -17,6 +21,7 @@ interface ActiveRequestState {
 export const useActiveRequestStore = create<ActiveRequestState>((set) => ({
   draft: null,
   response: null,
+  responseRequestId: undefined,
   isSending: false,
   activeTab: "body",
   setDraft: (draft) => set({ draft }),
@@ -26,7 +31,11 @@ export const useActiveRequestStore = create<ActiveRequestState>((set) => ({
         ? { ...state.draft, ...patch, updatedAt: new Date().toISOString() }
         : null,
     })),
-  setResponse: (response) => set({ response }),
+  setResponse: (response, responseRequestId) =>
+    set({
+      response,
+      responseRequestId: response ? responseRequestId : undefined,
+    }),
   setSending: (isSending) => set({ isSending }),
   setActiveTab: (activeTab) => set({ activeTab }),
 }));
