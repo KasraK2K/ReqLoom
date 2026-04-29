@@ -29,6 +29,8 @@ interface WorkspaceState {
 }
 
 const WORKSPACE_SELECTION_KEY = "httpclient.workspace-selection";
+let workspaceListRequestSequence = 0;
+const workspaceTreeRequestSequences = new Map<string, number>();
 
 function projectContainsRequest(
   project: TreeProject | undefined,
@@ -51,8 +53,12 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       activeRequestId: undefined,
       isLoading: false,
       loadWorkspaces: async () => {
+        const requestSequence = ++workspaceListRequestSequence;
         set({ isLoading: true });
         const { workspaces } = await api.listWorkspaces();
+        if (requestSequence !== workspaceListRequestSequence) {
+          return;
+        }
         set((state) => ({
           workspaces,
           activeWorkspaceId: workspaces.some(
@@ -64,7 +70,13 @@ export const useWorkspaceStore = create<WorkspaceState>()(
         }));
       },
       loadWorkspaceTree: async (workspaceId) => {
+        const requestSequence =
+          (workspaceTreeRequestSequences.get(workspaceId) ?? 0) + 1;
+        workspaceTreeRequestSequences.set(workspaceId, requestSequence);
         const { tree } = await api.getWorkspaceTree(workspaceId);
+        if (workspaceTreeRequestSequences.get(workspaceId) !== requestSequence) {
+          return;
+        }
         set((state) => {
           const activeProjectId =
             tree.projects.find((project) => project._id === state.activeProjectId)

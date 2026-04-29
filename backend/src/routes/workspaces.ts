@@ -30,6 +30,22 @@ async function requireWorkspace(
   return workspace;
 }
 
+function workspaceRevision(workspace: WorkspaceMeta): string {
+  return workspace.updatedAt ?? workspace.createdAt;
+}
+
+function assertExpectedWorkspaceRevision(
+  app: Parameters<FastifyPluginAsync>[0],
+  workspace: WorkspaceMeta,
+  expectedUpdatedAt?: string,
+) {
+  if (expectedUpdatedAt && expectedUpdatedAt !== workspaceRevision(workspace)) {
+    throw app.httpErrors.conflict(
+      "Workspace was updated by another client. Refresh and try again.",
+    );
+  }
+}
+
 const workspaceRoutes: FastifyPluginAsync = async (app) => {
   app.get("/workspaces", { preHandler: app.authenticate }, async (request) => ({
     workspaces: await listAccessibleWorkspaces(
@@ -75,6 +91,13 @@ const workspaceRoutes: FastifyPluginAsync = async (app) => {
         workspaceId.toHexString(),
       ).createIndex({ entityType: 1, order: 1 });
 
+      app.publishRealtimeEvent({
+        kind: "workspace.created",
+        actorUserId: user._id,
+        workspaceIds: [workspaceId.toHexString()],
+        visibleToUserIds: [user._id],
+      });
+
       return { workspace: serializeDoc(workspace) };
     },
   );
@@ -98,7 +121,10 @@ const workspaceRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  app.patch<{ Params: { workspaceId: string }; Body: { name: string } }>(
+  app.patch<{
+    Params: { workspaceId: string };
+    Body: { name: string; expectedUpdatedAt?: string };
+  }>(
     "/workspaces/:workspaceId",
     { preHandler: app.authenticate },
     async (request) => {
@@ -114,14 +140,33 @@ const workspaceRoutes: FastifyPluginAsync = async (app) => {
       if (!name) {
         throw app.httpErrors.badRequest("Workspace name is required");
       }
-
-      await workspaceMetaCollection(app.mongo).updateOne(
-        { _id: toObjectId(workspace._id) },
-        { $set: { name, updatedAt: isoNow() } },
+      assertExpectedWorkspaceRevision(
+        app,
+        workspace,
+        request.body.expectedUpdatedAt,
       );
 
+      const updateResult = await workspaceMetaCollection(app.mongo).updateOne(
+        request.body.expectedUpdatedAt
+          ? { _id: toObjectId(workspace._id), updatedAt: request.body.expectedUpdatedAt }
+          : { _id: toObjectId(workspace._id) },
+        { $set: { name, updatedAt: isoNow() } },
+      );
+      if (request.body.expectedUpdatedAt && updateResult.matchedCount === 0) {
+        throw app.httpErrors.conflict(
+          "Workspace was updated by another client. Refresh and try again.",
+        );
+      }
+
+      const updatedWorkspace = await requireWorkspace(app, workspace._id);
+      app.publishRealtimeEvent({
+        kind: "workspace.updated",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+      });
+
       return {
-        workspace: await requireWorkspace(app, workspace._id),
+        workspace: updatedWorkspace,
       };
     },
   );
@@ -199,6 +244,13 @@ const workspaceRoutes: FastifyPluginAsync = async (app) => {
         ).insertMany(duplicatedRecords as never[]);
       }
 
+      app.publishRealtimeEvent({
+        kind: "workspace.duplicated",
+        actorUserId: user._id,
+        workspaceIds: [duplicatedWorkspaceId.toHexString()],
+        visibleToUserIds: [user._id],
+      });
+
       return {
         workspace: serializeDoc(duplicatedWorkspace),
       };
@@ -229,6 +281,12 @@ const workspaceRoutes: FastifyPluginAsync = async (app) => {
         ),
       );
 
+      app.publishRealtimeEvent({
+        kind: "workspace.reordered",
+        actorUserId: user._id,
+        workspaceIds: orderedIds,
+      });
+
       return { success: true };
     },
   );
@@ -251,6 +309,16 @@ const workspaceRoutes: FastifyPluginAsync = async (app) => {
       await app.mongo
         .dropCollection(`workspaces_${workspace._id}`)
         .catch(() => undefined);
+
+      app.publishRealtimeEvent({
+        kind: "workspace.deleted",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        visibleToUserIds: [
+          workspace.ownerId,
+          ...workspace.members.map((member) => member.userId),
+        ],
+      });
 
       return { success: true };
     },

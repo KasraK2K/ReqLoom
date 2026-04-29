@@ -108,6 +108,22 @@ function clampOrder(value: number | undefined, max: number) {
   return Math.max(0, Math.min(value ?? max, max));
 }
 
+function projectRevision(project: ProjectDoc): string {
+  return project.updatedAt ?? project.createdAt;
+}
+
+function assertExpectedProjectRevision(
+  app: Parameters<FastifyPluginAsync>[0],
+  project: ProjectDoc,
+  expectedUpdatedAt?: string,
+) {
+  if (expectedUpdatedAt && expectedUpdatedAt !== projectRevision(project)) {
+    throw app.httpErrors.conflict(
+      "Project was updated by another client. Refresh and try again.",
+    );
+  }
+}
+
 const projectRoutes: FastifyPluginAsync = async (app) => {
   app.post<{ Body: { workspaceId: string; name: string } }>(
     "/projects",
@@ -158,6 +174,12 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
       await workspaceDataCollection(app.mongo, workspace._id).insertOne(
         project as never,
       );
+      app.publishRealtimeEvent({
+        kind: "project.created",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: [projectId.toHexString()],
+      });
       return {
         project: normalizeProject(
           serializeDoc(project) as ProjectDoc,
@@ -248,6 +270,7 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
             isPrivate: false,
             createdAt: now,
             updatedAt: now,
+            contentUpdatedAt: now,
           });
         });
       };
@@ -286,6 +309,13 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
         records as never[],
       );
 
+      app.publishRealtimeEvent({
+        kind: "project.imported",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: [projectId],
+      });
+
       return {
         project: await requireProject(app, workspace._id, projectId, user),
         importedFolders,
@@ -300,6 +330,7 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
       name?: string;
       envVars?: ProjectEnvVar[];
       isPrivate?: boolean;
+      expectedUpdatedAt?: string;
     };
   }>(
     "/projects/:projectId",
@@ -353,16 +384,41 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
       }
 
       await app.assertProjectUnlocked(request, project, workspace);
+      assertExpectedProjectRevision(
+        app,
+        project,
+        request.body.expectedUpdatedAt,
+      );
 
-      await workspaceDataCollection(app.mongo, workspace._id).updateOne(
-        { _id: toObjectId(project._id) },
+      const updateResult = await workspaceDataCollection(app.mongo, workspace._id).updateOne(
+        request.body.expectedUpdatedAt
+          ? { _id: toObjectId(project._id), updatedAt: request.body.expectedUpdatedAt }
+          : { _id: toObjectId(project._id) },
         {
           $set: patch,
         },
       );
+      if (request.body.expectedUpdatedAt && updateResult.matchedCount === 0) {
+        throw app.httpErrors.conflict(
+          "Project was updated by another client. Refresh and try again.",
+        );
+      }
+
+      const updatedProject = await requireProject(
+        app,
+        workspace._id,
+        project._id,
+        user,
+      );
+      app.publishRealtimeEvent({
+        kind: "project.updated",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: [project._id],
+      });
 
       return {
-        project: await requireProject(app, workspace._id, project._id, user),
+        project: updatedProject,
       };
     },
   );
@@ -463,6 +519,13 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
         ),
       );
 
+      app.publishRealtimeEvent({
+        kind: "project.moved",
+        actorUserId: user._id,
+        workspaceIds: [sourceWorkspace._id, targetWorkspace._id],
+        projectIds: [project._id],
+      });
+
       return {
         project: await requireProject(
           app,
@@ -514,6 +577,10 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
           updatedAt: now,
         } as Record<string, unknown>;
 
+        if (record.entityType === "request") {
+          cloned.contentUpdatedAt = now;
+        }
+
         if (record._id.toHexString() === project._id) {
           cloned.name = `${project.name} Copy`;
           cloned.ownerId = user._id;
@@ -540,6 +607,12 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
       await workspaceDataCollection(app.mongo, workspace._id).insertMany(
         duplicates as never[],
       );
+      app.publishRealtimeEvent({
+        kind: "project.duplicated",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: [idMap.get(project._id)!],
+      });
       return {
         project: await requireProject(
           app,
@@ -572,6 +645,13 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
         ),
       );
 
+      app.publishRealtimeEvent({
+        kind: "project.reordered",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: request.body.orderedIds,
+      });
+
       return { success: true };
     },
   );
@@ -599,6 +679,13 @@ const projectRoutes: FastifyPluginAsync = async (app) => {
 
       await workspaceDataCollection(app.mongo, workspace._id).deleteMany({
         $or: [{ _id: toObjectId(project._id) }, { projectId: project._id }],
+      });
+
+      app.publishRealtimeEvent({
+        kind: "project.deleted",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: [project._id],
       });
 
       return { success: true };

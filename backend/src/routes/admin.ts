@@ -112,6 +112,12 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
         userRecord.workspaceIds,
         userRecord.role,
       );
+      app.publishRealtimeEvent({
+        kind: "workspace.access.changed",
+        actorUserId: currentUser._id,
+        workspaceIds: userRecord.workspaceIds,
+        visibleToUserIds: [userId.toHexString()],
+      });
 
       return {
         user: sanitizeAuthUser(userRecord) as User,
@@ -155,6 +161,17 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
         request.body.workspaceIds ?? existingUser.workspaceIds,
         request.body.role ?? existingUser.role,
       );
+      app.publishRealtimeEvent({
+        kind: "workspace.access.changed",
+        actorUserId: getRequiredUser(request)._id,
+        workspaceIds: [
+          ...new Set([
+            ...existingUser.workspaceIds,
+            ...(request.body.workspaceIds ?? existingUser.workspaceIds),
+          ]),
+        ],
+        visibleToUserIds: [request.params.userId],
+      });
 
       const updatedUser = await usersCollection(app.mongo).findOne({
         _id: existingUser._id,
@@ -215,13 +232,26 @@ const adminRoutes: FastifyPluginAsync = async (app) => {
         throw app.httpErrors.forbidden("Only the superadmin can delete users");
       }
 
-      await usersCollection(app.mongo).deleteOne({
+      const existingUser = await usersCollection(app.mongo).findOne({
         _id: toObjectId(request.params.userId),
+      });
+      if (!existingUser) {
+        throw app.httpErrors.notFound("User not found");
+      }
+
+      await usersCollection(app.mongo).deleteOne({
+        _id: existingUser._id,
       });
       await workspaceMetaCollection(app.mongo).updateMany(
         { "members.userId": request.params.userId },
         { $pull: { members: { userId: request.params.userId } } },
       );
+      app.publishRealtimeEvent({
+        kind: "workspace.access.changed",
+        actorUserId: getRequiredUser(request)._id,
+        workspaceIds: existingUser.workspaceIds,
+        visibleToUserIds: [request.params.userId],
+      });
 
       return { success: true };
     },

@@ -202,6 +202,27 @@ function clampOrder(value: number | undefined, max: number) {
   return Math.max(0, Math.min(value ?? max, max));
 }
 
+function documentRevision(document: { createdAt: string; updatedAt?: string }) {
+  return document.updatedAt ?? document.createdAt;
+}
+
+function requestContentRevision(request: RequestDoc) {
+  return request.contentUpdatedAt ?? documentRevision(request);
+}
+
+function assertExpectedRevision(
+  app: Parameters<FastifyPluginAsync>[0],
+  label: string,
+  actualRevision: string,
+  expectedRevision?: string,
+) {
+  if (expectedRevision && expectedRevision !== actualRevision) {
+    throw app.httpErrors.conflict(
+      `${label} was updated by another client. Refresh and try again.`,
+    );
+  }
+}
+
 async function listProjectFolders(
   app: Parameters<FastifyPluginAsync>[0],
   workspaceId: string,
@@ -425,12 +446,24 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
       await workspaceDataCollection(app.mongo, workspace._id).insertOne(
         folder as never,
       );
+      app.publishRealtimeEvent({
+        kind: "folder.created",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: [project._id],
+        folderIds: [folder._id.toHexString()],
+      });
       return { folder: normalizeFolder(serializeDoc(folder) as FolderDoc) };
     },
   );
   app.patch<{
     Params: { folderId: string };
-    Body: { workspaceId: string; name?: string; isPrivate?: boolean };
+    Body: {
+      workspaceId: string;
+      name?: string;
+      isPrivate?: boolean;
+      expectedUpdatedAt?: string;
+    };
   }>(
     "/folders/:folderId",
     { preHandler: app.authenticate },
@@ -479,18 +512,40 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
       }
 
       await app.assertProjectUnlocked(request, project, workspace);
-      await workspaceDataCollection(app.mongo, workspace._id).updateOne(
-        { _id: toObjectId(folder._id) },
+      assertExpectedRevision(
+        app,
+        "Folder",
+        documentRevision(folder),
+        request.body.expectedUpdatedAt,
+      );
+      const updateResult = await workspaceDataCollection(app.mongo, workspace._id).updateOne(
+        request.body.expectedUpdatedAt
+          ? { _id: toObjectId(folder._id), updatedAt: request.body.expectedUpdatedAt }
+          : { _id: toObjectId(folder._id) },
         { $set: patch },
       );
+      if (request.body.expectedUpdatedAt && updateResult.matchedCount === 0) {
+        throw app.httpErrors.conflict(
+          "Folder was updated by another client. Refresh and try again.",
+        );
+      }
+
+      const updatedFolder = await requireFolder(
+        app,
+        workspace._id,
+        request.params.folderId,
+        user,
+      );
+      app.publishRealtimeEvent({
+        kind: "folder.updated",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: [project._id],
+        folderIds: [folder._id],
+      });
 
       return {
-        folder: await requireFolder(
-          app,
-          workspace._id,
-          request.params.folderId,
-          user,
-        ),
+        folder: updatedFolder,
       };
     },
   );
@@ -571,11 +626,20 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
           responseHistory: [],
           createdAt: now,
           updatedAt: now,
+          contentUpdatedAt: now,
         }));
         await workspaceDataCollection(app.mongo, workspace._id).insertMany(
           clonedRequests as never[],
         );
       }
+
+      app.publishRealtimeEvent({
+        kind: "folder.duplicated",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: [project._id],
+        folderIds: [idMap.get(folder._id)!],
+      });
 
       return {
         folder: await requireFolder(
@@ -634,6 +698,13 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
         ),
       ),
     );
+    app.publishRealtimeEvent({
+      kind: "folder.reordered",
+      actorUserId: user._id,
+      workspaceIds: [workspace._id],
+      projectIds: [project._id],
+      folderIds: request.body.orderedIds,
+    });
     return { success: true };
   });
   app.post<{
@@ -745,6 +816,13 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
               ),
             ),
           );
+          app.publishRealtimeEvent({
+            kind: "folder.moved",
+            actorUserId: user._id,
+            workspaceIds: [workspace._id],
+            projectIds: [sourceProject._id],
+            folderIds: [folder._id],
+          });
         }
 
         return {
@@ -813,7 +891,13 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
         if (movedRequests.length > 0) {
           await collection.updateMany(
             { entityType: "request", folderId: { $in: movedSubtreeIds } },
-            { $set: { projectId: targetProject._id, updatedAt: now } },
+            {
+              $set: {
+                projectId: targetProject._id,
+                updatedAt: now,
+                contentUpdatedAt: now,
+              },
+            },
           );
           await collection.updateMany(
             {
@@ -824,6 +908,14 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
           );
         }
       }
+
+      app.publishRealtimeEvent({
+        kind: "folder.moved",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: relevantProjectIds,
+        folderIds: [folder._id],
+      });
 
       return {
         folder: await requireFolder(app, workspace._id, folder._id, user),
@@ -869,6 +961,13 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
           },
           { entityType: "request", folderId: { $in: subtreeFolderIds } },
         ],
+      });
+      app.publishRealtimeEvent({
+        kind: "folder.deleted",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: [project._id],
+        folderIds: subtreeFolderIds,
       });
       return { success: true };
     },
@@ -929,11 +1028,19 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
       isPrivate: false,
       createdAt: now,
       updatedAt: now,
+      contentUpdatedAt: now,
     };
 
     await workspaceDataCollection(app.mongo, workspace._id).insertOne(
       requestDoc as never,
     );
+    app.publishRealtimeEvent({
+      kind: "request.created",
+      actorUserId: user._id,
+      workspaceIds: [workspace._id],
+      projectIds: [project._id],
+      requestIds: [requestId.toHexString()],
+    });
     return {
       request: normalizeRequest(
         serializeDoc(requestDoc) as RequestDoc,
@@ -943,7 +1050,10 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
   });
   app.patch<{
     Params: { requestId: string };
-    Body: Partial<RequestDoc> & { workspaceId: string };
+    Body: Partial<RequestDoc> & {
+      workspaceId: string;
+      expectedContentUpdatedAt?: string;
+    };
   }>(
     "/requests/:requestId",
     { preHandler: app.authenticate },
@@ -991,11 +1101,12 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
 
       await app.assertProjectUnlocked(request, project, workspace);
 
+      const now = isoNow();
       const patch: Record<string, unknown> = {
-        updatedAt: isoNow(),
+        updatedAt: now,
       };
 
-      [
+      const mutableKeys = [
         "name",
         "method",
         "url",
@@ -1006,11 +1117,16 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
         "folderId",
         "order",
         "isPrivate",
-      ].forEach((key) => {
+      ] as const;
+      mutableKeys.forEach((key) => {
         if (key in request.body) {
           patch[key] = request.body[key as keyof typeof request.body];
         }
       });
+      const hasContentPatch = mutableKeys.some((key) => key in request.body);
+      if (hasContentPatch) {
+        patch.contentUpdatedAt = now;
+      }
 
       if ("isPrivate" in patch) {
         patch.isPrivate = Boolean(patch.isPrivate);
@@ -1030,18 +1146,49 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
         );
       }
 
-      await workspaceDataCollection(app.mongo, workspace._id).updateOne(
-        { _id: toObjectId(requestDoc._id) },
+      assertExpectedRevision(
+        app,
+        "Request",
+        requestContentRevision(requestDoc),
+        request.body.expectedContentUpdatedAt,
+      );
+      const revisionFilter = request.body.expectedContentUpdatedAt
+        ? requestDoc.contentUpdatedAt
+          ? { contentUpdatedAt: request.body.expectedContentUpdatedAt }
+          : {
+              updatedAt: request.body.expectedContentUpdatedAt,
+              contentUpdatedAt: { $exists: false },
+            }
+        : {};
+      const updateResult = await workspaceDataCollection(app.mongo, workspace._id).updateOne(
+        { _id: toObjectId(requestDoc._id), ...revisionFilter },
         { $set: patch },
       );
+      if (
+        request.body.expectedContentUpdatedAt &&
+        updateResult.matchedCount === 0
+      ) {
+        throw app.httpErrors.conflict(
+          "Request was updated by another client. Refresh and try again.",
+        );
+      }
+
+      const updatedRequest = await requireRequestDoc(
+        app,
+        workspace._id,
+        requestDoc._id,
+        user,
+      );
+      app.publishRealtimeEvent({
+        kind: "request.updated",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: [project._id],
+        requestIds: [requestDoc._id],
+      });
 
       return {
-        request: await requireRequestDoc(
-          app,
-          workspace._id,
-          requestDoc._id,
-          user,
-        ),
+        request: updatedRequest,
       };
     },
   );
@@ -1164,7 +1311,13 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
           operations.push({
             updateOne: {
               filter: { _id: toObjectId(requestId), entityType: "request" },
-              update: { $set: { order: index, updatedAt: now } },
+              update: {
+                $set: {
+                  order: index,
+                  updatedAt: now,
+                  contentUpdatedAt: now,
+                },
+              },
             },
           });
         });
@@ -1181,7 +1334,13 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
           operations.push({
             updateOne: {
               filter: { _id: toObjectId(requestId), entityType: "request" },
-              update: { $set: { order: index, updatedAt: now } },
+              update: {
+                $set: {
+                  order: index,
+                  updatedAt: now,
+                  contentUpdatedAt: now,
+                },
+              },
             },
           });
         });
@@ -1198,8 +1357,9 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
                         folderId: targetFolderId,
                         order: index,
                         updatedAt: now,
+                        contentUpdatedAt: now,
                       }
-                    : { order: index, updatedAt: now },
+                    : { order: index, updatedAt: now, contentUpdatedAt: now },
               },
             },
           });
@@ -1218,6 +1378,14 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
           { $set: { projectId: targetProject._id, updatedAt: now } },
         );
       }
+
+      app.publishRealtimeEvent({
+        kind: "request.moved",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: Array.from(new Set([requestDoc.projectId, targetProject._id])),
+        requestIds: [requestDoc._id],
+      });
 
       return {
         request: await requireRequestDoc(app, workspace._id, requestDoc._id, user),
@@ -1262,7 +1430,15 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
         responseHistory: [],
         createdAt: now,
         updatedAt: now,
+        contentUpdatedAt: now,
       } as never);
+      app.publishRealtimeEvent({
+        kind: "request.duplicated",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: [project._id],
+        requestIds: [duplicateId.toHexString()],
+      });
       return {
         request: await requireRequestDoc(
           app,
@@ -1286,14 +1462,38 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
         );
       }
 
+      const requestIds = request.body.orderedIds;
+      const orderedObjectIds = requestIds.map((requestId) => toObjectId(requestId));
+      const affectedRequests = serializeDocs(
+        await workspaceDataCollection(app.mongo, workspace._id)
+          .find({ _id: { $in: orderedObjectIds }, entityType: "request" })
+          .toArray(),
+      ) as RequestDoc[];
+      const affectedProjectIds = Array.from(
+        new Set(affectedRequests.map((requestDoc) => requestDoc.projectId)),
+      );
+      const now = isoNow();
       await Promise.all(
-        request.body.orderedIds.map((requestId, index) =>
+        requestIds.map((requestId, index) =>
           workspaceDataCollection(app.mongo, workspace._id).updateOne(
             { _id: toObjectId(requestId), entityType: "request" },
-            { $set: { order: index, updatedAt: isoNow() } },
+            {
+              $set: {
+                order: index,
+                updatedAt: now,
+                contentUpdatedAt: now,
+              },
+            },
           ),
         ),
       );
+      app.publishRealtimeEvent({
+        kind: "request.reordered",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: affectedProjectIds,
+        requestIds,
+      });
       return { success: true };
     },
   );
@@ -1329,6 +1529,13 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
       await app.assertProjectUnlocked(request, project, workspace);
       await workspaceDataCollection(app.mongo, workspace._id).deleteOne({
         _id: toObjectId(requestDoc._id),
+      });
+      app.publishRealtimeEvent({
+        kind: "request.deleted",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: [project._id],
+        requestIds: [requestDoc._id],
       });
       return { success: true };
     },
@@ -1458,6 +1665,14 @@ const requestRoutes: FastifyPluginAsync = async (app) => {
           },
         );
       }
+
+      app.publishRealtimeEvent({
+        kind: "request.sent",
+        actorUserId: user._id,
+        workspaceIds: [workspace._id],
+        projectIds: [project._id],
+        requestIds: request.body.requestId ? [request.body.requestId] : undefined,
+      });
 
       return result;
     },

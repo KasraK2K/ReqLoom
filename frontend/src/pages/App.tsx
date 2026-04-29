@@ -17,7 +17,8 @@ import { WorkspaceTree } from "../components/sidebar/WorkspaceTree";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import { api } from "../lib/http-client";
+import { useRealtimeSync } from "../hooks/use-realtime-sync";
+import { api, isApiConflictError } from "../lib/http-client";
 import {
   applyTheme,
   getStoredThemeId,
@@ -37,7 +38,11 @@ import { useActiveRequestStore } from "../store/activeRequest";
 import { showErrorToast, showSuccessToast } from "../store/toasts";
 import { useAuthStore } from "../store/auth";
 import { useEnvironmentStore } from "../store/environment";
-import { useHistoryStore } from "../store/history";
+import {
+  isCurrentHistoryRequestSequence,
+  nextHistoryRequestSequence,
+  useHistoryStore,
+} from "../store/history";
 import { useWorkspaceStore } from "../store/workspaces";
 
 const INSPECTOR_TAB_STORAGE_KEY = "httpclient.inspector-tab";
@@ -97,6 +102,12 @@ function buildResponseFromHistory(
   }
 
   return response;
+}
+
+function getRequestContentRevision(
+  request: RequestDoc | null | undefined,
+): string | undefined {
+  return request?.contentUpdatedAt ?? request?.updatedAt ?? request?.createdAt;
 }
 
 type CreateDialogState =
@@ -175,6 +186,8 @@ export default function App() {
   } = useWorkspaceStore();
   const {
     draft,
+    draftBaseContentUpdatedAt,
+    isDraftDirty,
     response,
     responseRequestId,
     isSending,
@@ -198,6 +211,8 @@ export default function App() {
   const [selectedThemeId, setSelectedThemeId] = useState<ThemeId>(getStoredThemeId);
   const [previewThemeId, setPreviewThemeId] = useState<ThemeId | null>(null);
   const sendAbortControllerRef = useRef<AbortController | null>(null);
+  useRealtimeSync(Boolean(user));
+
   const canCreateWorkspace = user?.role !== "member";
   const canCreateProject = user?.role !== "member";
   const canManagePrivacy = user?.role !== "member";
@@ -303,7 +318,7 @@ export default function App() {
 
   useEffect(() => {
     if (!user) {
-      setDraft(null);
+      setDraft(null, { dirty: false });
       setResponse(null);
       return;
     }
@@ -329,9 +344,19 @@ export default function App() {
     }
 
     setEnvVars(activeProject._id, activeProject.envVars);
+    const historyRequestSequence = nextHistoryRequestSequence(activeProject._id);
     api
       .getProjectHistory(activeProject._id, activeProject.workspaceId)
-      .then(({ history }) => setHistory(activeProject._id, history))
+      .then(({ history }) => {
+        if (
+          isCurrentHistoryRequestSequence(
+            activeProject._id,
+            historyRequestSequence,
+          )
+        ) {
+          setHistory(activeProject._id, history);
+        }
+      })
       .catch(() => undefined);
   }, [activeProject, setEnvVars, setHistory]);
 
@@ -355,8 +380,20 @@ export default function App() {
   ]);
 
   useEffect(() => {
-    setDraft(activeRequest ? structuredClone(activeRequest) : null);
-  }, [activeRequest, setDraft]);
+    if (!activeRequest) {
+      setDraft(null, { dirty: false });
+      return;
+    }
+
+    if (isDraftDirty && draft?._id === activeRequest._id) {
+      return;
+    }
+
+    setDraft(structuredClone(activeRequest), {
+      dirty: false,
+      baseContentUpdatedAt: getRequestContentRevision(activeRequest),
+    });
+  }, [activeRequest, draft?._id, isDraftDirty, setDraft]);
 
   useEffect(() => {
     if (user?.role !== "superadmin") {
@@ -668,7 +705,14 @@ export default function App() {
     }
 
     if (renameDialog.kind === "workspace") {
-      await api.renameWorkspace(renameDialog.workspaceId, name);
+      const workspace = workspaces.find(
+        (item) => item._id === renameDialog.workspaceId,
+      );
+      await api.renameWorkspace(
+        renameDialog.workspaceId,
+        name,
+        workspace?.updatedAt ?? workspace?.createdAt,
+      );
       await refreshWorkspaces();
       showSuccessToast(`Saved workspace name as ${name}.`, "Workspace Saved");
       return;
@@ -686,7 +730,7 @@ export default function App() {
       await api.updateProject(
         renameDialog.projectId,
         renameDialog.workspaceId,
-        { name },
+        { name, expectedUpdatedAt: project.updatedAt ?? project.createdAt },
       );
       await refreshTree(renameDialog.workspaceId);
       showSuccessToast(`Saved project name as ${name}.`, "Project Saved");
@@ -705,7 +749,14 @@ export default function App() {
       await api.updateFolder(
         renameDialog.folderId,
         renameDialog.workspaceId,
-        { name },
+        {
+          name,
+          expectedUpdatedAt:
+            findFolderTarget(renameDialog.workspaceId, renameDialog.folderId)
+              ?.folder.updatedAt ??
+            findFolderTarget(renameDialog.workspaceId, renameDialog.folderId)
+              ?.folder.createdAt,
+        },
       );
       await refreshTree(renameDialog.workspaceId);
       showSuccessToast(`Saved folder name as ${name}.`, "Folder Saved");
@@ -720,10 +771,15 @@ export default function App() {
       throw new Error("Project not found.");
     }
 
-    await api.updateRequest(
+    const target = findRequestTarget(
+      renameDialog.workspaceId,
       renameDialog.requestId,
-      { workspaceId: renameDialog.workspaceId, name },
     );
+    await api.updateRequest(renameDialog.requestId, {
+      workspaceId: renameDialog.workspaceId,
+      name,
+      expectedContentUpdatedAt: getRequestContentRevision(target?.request),
+    });
     await refreshTree(renameDialog.workspaceId);
     showSuccessToast(`Saved request name as ${name}.`, "Request Saved");
   };
@@ -738,7 +794,10 @@ export default function App() {
       throw new Error("Project not found.");
     }
 
-    await api.updateProject(projectId, workspaceId, { isPrivate });
+    await api.updateProject(projectId, workspaceId, {
+      isPrivate,
+      expectedUpdatedAt: project.updatedAt ?? project.createdAt,
+    });
     await refreshTree(workspaceId);
     showSuccessToast(
       isPrivate
@@ -757,7 +816,10 @@ export default function App() {
       throw new Error("Folder not found.");
     }
 
-    await api.updateFolder(folderId, workspaceId, { isPrivate });
+    await api.updateFolder(folderId, workspaceId, {
+      isPrivate,
+      expectedUpdatedAt: target.folder.updatedAt ?? target.folder.createdAt,
+    });
     await refreshTree(workspaceId);
     showSuccessToast(
       isPrivate
@@ -779,6 +841,7 @@ export default function App() {
     await api.updateRequest(requestId, {
       workspaceId,
       isPrivate,
+      expectedContentUpdatedAt: getRequestContentRevision(target.request),
     });
     await refreshTree(workspaceId);
     showSuccessToast(
@@ -966,12 +1029,34 @@ export default function App() {
     if (!draft) {
       return;
     }
-    await api.updateRequest(draft._id, {
-      ...draft,
-      workspaceId: draft.workspaceId,
-    });
-    await refreshTree(draft.workspaceId);
-    showSuccessToast(`Saved ${draft.name}.`, "Request Saved");
+    try {
+      const { request } = await api.updateRequest(draft._id, {
+        ...draft,
+        workspaceId: draft.workspaceId,
+        expectedContentUpdatedAt:
+          draftBaseContentUpdatedAt ??
+          getRequestContentRevision(activeRequest) ??
+          getRequestContentRevision(draft),
+      });
+      setDraft(structuredClone(request), {
+        dirty: false,
+        baseContentUpdatedAt: getRequestContentRevision(request),
+      });
+      await refreshTree(draft.workspaceId);
+      showSuccessToast(`Saved ${draft.name}.`, "Request Saved");
+    } catch (error) {
+      if (isApiConflictError(error)) {
+        await refreshTree(draft.workspaceId).catch(() => undefined);
+        showErrorToast(error, {
+          title: "Request Changed Elsewhere",
+          fallbackMessage:
+            "This request changed in another tab or browser. Review the latest version before saving again.",
+        });
+        return;
+      }
+
+      throw error;
+    }
   };
 
   const sendRequest = async (payload: Parameters<typeof api.execute>[0]) => {
@@ -986,11 +1071,19 @@ export default function App() {
       const result = await api.execute(payload, abortController.signal);
       setResponse(result, payload.requestId);
       if (activeProject) {
+        const historyRequestSequence = nextHistoryRequestSequence(activeProject._id);
         const { history } = await api.getProjectHistory(
           activeProject._id,
           activeProject.workspaceId,
         );
-        setHistory(activeProject._id, history);
+        if (
+          isCurrentHistoryRequestSequence(
+            activeProject._id,
+            historyRequestSequence,
+          )
+        ) {
+          setHistory(activeProject._id, history);
+        }
       }
     } catch (error) {
       if (!isAbortError(error)) {
@@ -1014,6 +1107,7 @@ export default function App() {
     }
     await api.updateProject(activeProject._id, activeWorkspace._id, {
       envVars: envVars[activeProject._id] ?? [],
+      expectedUpdatedAt: activeProject.updatedAt ?? activeProject.createdAt,
     });
     await refreshTree(activeWorkspace._id);
     showSuccessToast(

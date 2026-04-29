@@ -10,6 +10,33 @@ export type HttpMethod =
   | "OPTIONS";
 
 export type WorkspaceEntityType = "project" | "folder" | "request" | "history";
+export type RealtimeMutationKind =
+  | "workspace.created"
+  | "workspace.updated"
+  | "workspace.duplicated"
+  | "workspace.reordered"
+  | "workspace.deleted"
+  | "workspace.access.changed"
+  | "project.created"
+  | "project.imported"
+  | "project.updated"
+  | "project.moved"
+  | "project.duplicated"
+  | "project.reordered"
+  | "project.deleted"
+  | "folder.created"
+  | "folder.updated"
+  | "folder.moved"
+  | "folder.duplicated"
+  | "folder.reordered"
+  | "folder.deleted"
+  | "request.created"
+  | "request.updated"
+  | "request.moved"
+  | "request.duplicated"
+  | "request.reordered"
+  | "request.deleted"
+  | "request.sent";
 export type AuthType = "none" | "bearer" | "basic";
 export type BodyType =
   | "none"
@@ -171,6 +198,18 @@ export interface RequestDoc extends Timestamped {
   responseHistory: RequestHistorySummary[];
   order: number;
   isPrivate: boolean;
+  contentUpdatedAt?: string;
+}
+
+export interface RealtimeEvent {
+  id: string;
+  kind: RealtimeMutationKind;
+  occurredAt: string;
+  actorUserId?: string;
+  workspaceIds: string[];
+  projectIds?: string[];
+  folderIds?: string[];
+  requestIds?: string[];
 }
 
 export interface HistoryDoc extends Timestamped {

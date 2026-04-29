@@ -25,6 +25,20 @@
 } from "@restify/shared";
 import { extractApiErrorMessage } from "./errors";
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+export function isApiConflictError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 409;
+}
+
 async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body != null && !headers.has("content-type")) {
@@ -39,8 +53,9 @@ async function requestJson<T>(path: string, init: RequestInit = {}): Promise<T> 
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(
+    throw new ApiError(
       extractApiErrorMessage(text) ?? `Request failed with ${response.status}`,
+      response.status,
     );
   }
 
@@ -88,10 +103,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name }),
     }),
-  renameWorkspace: (workspaceId: string, name: string) =>
+  renameWorkspace: (
+    workspaceId: string,
+    name: string,
+    expectedUpdatedAt?: string,
+  ) =>
     requestJson<{ workspace: WorkspaceMeta }>(`/workspaces/${workspaceId}`, {
       method: "PATCH",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, expectedUpdatedAt }),
     }),
   duplicateWorkspace: (workspaceId: string) =>
     requestJson<{ workspace: WorkspaceMeta }>(
@@ -115,7 +134,12 @@ export const api = {
   updateProject: (
     projectId: string,
     workspaceId: string,
-    values: { name?: string; envVars?: ProjectEnvVar[]; isPrivate?: boolean },
+    values: {
+      name?: string;
+      envVars?: ProjectEnvVar[];
+      isPrivate?: boolean;
+      expectedUpdatedAt?: string;
+    },
   ) =>
     requestJson<{ project: ProjectDoc }>(`/projects/${projectId}`, {
       method: "PATCH",
@@ -166,7 +190,7 @@ export const api = {
   updateFolder: (
     folderId: string,
     workspaceId: string,
-    values: { name?: string; isPrivate?: boolean },
+    values: { name?: string; isPrivate?: boolean; expectedUpdatedAt?: string },
   ) =>
     requestJson<{ folder: FolderDoc }>(`/folders/${folderId}`, {
       method: "PATCH",
@@ -217,7 +241,10 @@ export const api = {
     }),
   updateRequest: (
     requestId: string,
-    payload: Partial<RequestDoc> & { workspaceId: string },
+    payload: Partial<RequestDoc> & {
+      workspaceId: string;
+      expectedContentUpdatedAt?: string;
+    },
   ) =>
     requestJson<{ request: RequestDoc }>(`/requests/${requestId}`, {
       method: "PATCH",

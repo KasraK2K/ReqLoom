@@ -11,6 +11,7 @@ import adminRoutes from "./routes/admin.js";
 import mongodbPlugin from "./plugins/mongodb.js";
 import jwtPlugin from "./plugins/jwt.js";
 import unlockPlugin from "./plugins/unlock.js";
+import realtimePlugin from "./plugins/realtime.js";
 import { loadConfig, type AppConfig } from "./config.js";
 
 function isAllowedOrigin(origin: string, config: AppConfig): boolean {
@@ -49,6 +50,7 @@ export async function buildApp(config: AppConfig = loadConfig()) {
   await app.register(mongodbPlugin);
   await app.register(jwtPlugin);
   await app.register(unlockPlugin);
+  await app.register(realtimePlugin);
 
   await app.register(authRoutes, { prefix: "/api" });
   await app.register(workspaceRoutes, { prefix: "/api" });

@@ -1,6 +1,7 @@
 import type {
   AdminUser,
   ProjectDoc,
+  RealtimeEvent,
   UnlockTokenPayload,
   User,
   WorkspaceMeta,
@@ -32,6 +33,12 @@ declare module "fastify" {
       project: ProjectDoc,
       workspace?: WorkspaceMeta,
     ) => Promise<void>;
+    publishRealtimeEvent: (
+      event: Omit<RealtimeEvent, "id" | "occurredAt"> &
+        Partial<Pick<RealtimeEvent, "id" | "occurredAt">> & {
+          visibleToUserIds?: string[];
+        },
+    ) => void;
   }
 
   interface FastifyRequest {
