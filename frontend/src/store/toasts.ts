@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { getErrorMessage } from "../lib/errors";
+import { createClientId } from "../lib/id";
 
 export type ToastVariant = "success" | "error" | "warning" | "info";
 
@@ -35,11 +36,7 @@ const DEFAULT_TITLES: Record<ToastVariant, string> = {
 };
 
 function createToastId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-
-  return `toast-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  return createClientId("toast");
 }
 
 export const useToastStore = create<ToastState>((set) => ({

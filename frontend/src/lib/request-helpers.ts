@@ -6,10 +6,11 @@ import type {
   RequestDoc,
   RequestHistorySummary,
 } from "@restify/shared";
+import { createClientId } from "./id";
 
 function createRow<T extends HeaderRow | QueryParamRow>(): T {
   return {
-    id: crypto.randomUUID(),
+    id: createClientId("row"),
     key: "",
     value: "",
     enabled: true,
@@ -26,7 +27,7 @@ export function createQueryParamRow(): QueryParamRow {
 
 export function createFormValueRow(): FormValueRow {
   return {
-    id: crypto.randomUUID(),
+    id: createClientId("form-row"),
     key: "",
     value: "",
     enabled: true,
@@ -39,7 +40,7 @@ export function createEmptyRequest(
   folderId?: string | null,
 ): RequestDoc {
   return {
-    _id: crypto.randomUUID(),
+    _id: createClientId("request"),
     entityType: "request",
     workspaceId: project.workspaceId,
     projectId: project._id,

@@ -8,6 +8,7 @@ import type {
   RequestBodyConfig,
   RequestDoc,
 } from "@restify/shared";
+import { createClientId } from "./id";
 import type { VariableResolution } from "../types";
 
 const VARIABLE_PATTERN = /\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g;
@@ -205,7 +206,7 @@ export function buildParamsFromUrl(url: string) {
   try {
     const parsed = new URL(url);
     return [...parsed.searchParams.entries()].map(([key, value]) => ({
-      id: crypto.randomUUID(),
+      id: createClientId("param"),
       key,
       value,
       enabled: true,
