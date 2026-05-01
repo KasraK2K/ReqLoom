@@ -121,7 +121,94 @@ function writeGeneratedConfig(domain, targetPlatform) {
   return configPath;
 }
 
-function stampExecutableIcon(executablePath, iconPath) {
+function runStep(command, args, description) {
+  const result = spawnSync(command, args, {
+    stdio: "inherit",
+    env: process.env,
+  });
+
+  if (result.error) {
+    throw new Error(`${description}: ${result.error.message}`);
+  }
+
+  if (result.status !== 0) {
+    throw new Error(`${description} failed.`);
+  }
+}
+
+function refreshBrandAssets() {
+  if (process.platform === "win32") {
+    runStep(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        path.resolve("scripts", "export-brand-raster.ps1"),
+      ],
+      "Unable to export ReqLoom raster icons",
+    );
+  } else {
+    console.warn(
+      "Skipping raster icon export on non-Windows; using committed desktop/build/icons assets.",
+    );
+  }
+
+  runStep(
+    process.execPath,
+    [path.resolve("scripts", "generate-brand-assets.mjs")],
+    "Unable to generate ReqLoom desktop and favicon assets",
+  );
+}
+
+function normalizeWindowsVersion(version) {
+  const parts = version
+    .split(/[.-]/)
+    .map((part) => Number.parseInt(part, 10))
+    .filter((part) => Number.isInteger(part) && part >= 0)
+    .slice(0, 4);
+
+  while (parts.length < 4) {
+    parts.push(0);
+  }
+
+  return parts.join(".");
+}
+
+function normalizeAuthorName(author) {
+  if (!author) {
+    return "";
+  }
+
+  if (typeof author === "string") {
+    return author.replace(/\s*<[^>]+>\s*$/, "").trim();
+  }
+
+  if (typeof author.name === "string") {
+    return author.name;
+  }
+
+  return "";
+}
+
+function readDesktopPackageMetadata() {
+  const packageJson = JSON.parse(
+    readFileSync(path.resolve("desktop", "package.json"), "utf8"),
+  );
+  const productName =
+    packageJson.productName ?? packageJson.build?.productName ?? "ReqLoom";
+  const version = packageJson.version ?? "0.0.0";
+
+  return {
+    productName,
+    windowsVersion: normalizeWindowsVersion(version),
+    description: packageJson.description ?? productName,
+    companyName: normalizeAuthorName(packageJson.author),
+  };
+}
+
+function stampExecutableResources(executablePath, iconPath, metadata) {
   const data = readFileSync(executablePath);
   const exe = ResEdit.NtExecutable.from(data, { ignoreCert: true });
   const resources = ResEdit.NtExecutableResource.from(exe);
@@ -136,25 +223,47 @@ function stampExecutableIcon(executablePath, iconPath) {
     iconFile.icons.map((item) => item.data),
   );
 
+  const versionInfos = ResEdit.Resource.VersionInfo.fromEntries(
+    resources.entries,
+  );
+  const versionInfo = versionInfos[0];
+  if (versionInfo) {
+    const language = { lang: 1033, codepage: 1200 };
+    versionInfo.setFileVersion(metadata.windowsVersion, language.lang);
+    versionInfo.setProductVersion(metadata.windowsVersion, language.lang);
+    versionInfo.setStringValues(language, {
+      CompanyName: metadata.companyName,
+      FileDescription: metadata.description,
+      InternalName: metadata.productName,
+      OriginalFilename: `${metadata.productName}.exe`,
+      ProductName: metadata.productName,
+      LegalCopyright: `Copyright (C) ${new Date().getFullYear()} ${metadata.companyName}`,
+    });
+    versionInfo.outputToResourceEntries(resources.entries);
+  }
+
   resources.outputResource(exe);
   writeFileSync(executablePath, Buffer.from(exe.generate()));
 }
 
-function stampWindowsBuildIcons() {
+function stampWindowsBuildResources() {
   const iconPath = path.resolve("desktop", "build", "icon.ico");
   const distDir = path.resolve("desktop", "dist");
   const unpackedExe = path.join(distDir, "win-unpacked", "ReqLoom.exe");
+  const metadata = readDesktopPackageMetadata();
   const rootExecutables = readdirSync(distDir)
     .filter((entry) => entry.endsWith(".exe"))
     .map((entry) => path.join(distDir, entry));
 
   for (const executablePath of [unpackedExe, ...rootExecutables]) {
     try {
-      stampExecutableIcon(executablePath, iconPath);
-      console.log(`Stamped custom icon into ${path.relative(process.cwd(), executablePath)}`);
+      stampExecutableResources(executablePath, iconPath, metadata);
+      console.log(
+        `Stamped ReqLoom icon and metadata into ${path.relative(process.cwd(), executablePath)}`,
+      );
     } catch (error) {
       console.warn(
-        `Unable to stamp icon into ${path.relative(process.cwd(), executablePath)}: ${error instanceof Error ? error.message : String(error)}`,
+        `Unable to stamp ReqLoom resources into ${path.relative(process.cwd(), executablePath)}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -173,6 +282,7 @@ async function main() {
     );
   }
 
+  refreshBrandAssets();
   writeGeneratedConfig(domain, targetPlatform);
 
   const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -220,7 +330,7 @@ async function main() {
   }
 
   if (targetPlatform === "win") {
-    stampWindowsBuildIcons();
+    stampWindowsBuildResources();
   }
 
   console.log("Desktop build finished in desktop/dist");

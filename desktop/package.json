@@ -1,5 +1,6 @@
 {
     "name":  "@reqloom/desktop",
+    "productName":  "ReqLoom",
     "version":  "0.1.0",
     "private":  true,
     "description":  "Desktop shell for hosted ReqLoom deployments.",

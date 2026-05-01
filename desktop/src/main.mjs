@@ -2,6 +2,14 @@ import { app, BrowserWindow, dialog, nativeImage, shell } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 
+const APP_ID = "com.reqloom.desktop";
+const APP_NAME = "ReqLoom";
+
+app.setName(APP_NAME);
+if (process.platform === "win32") {
+  app.setAppUserModelId(APP_ID);
+}
+
 function readDesktopConfig() {
   const configPath = path.join(
     app.getAppPath(),
@@ -52,6 +60,7 @@ function createWindowIcon() {
 function createMainWindow(config) {
   const icon = createWindowIcon();
   const window = new BrowserWindow({
+    title: APP_NAME,
     width: 1440,
     height: 940,
     minWidth: 1100,
